@@ -1,0 +1,150 @@
+---
+title: UDP Scanning
+description: Why UDP enumeration matters, why it is slow, how to interpret open and open|filtered states, and when targeted scans beat full-range sweeps.
+section: info-gathering
+phase: 1
+order: 7
+difficulty: intermediate
+draft: false
+tags: ['nmap', 'udp', 'scanning']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## Why UDP matters
+
+Almost every beginner ignores UDP because it is slow and its results are messy. That is exactly why it deserves attention: services that live over UDP are commonly left unmanaged, and their enumeration often produces findings nobody else looked for.
+
+Protocols that typically run over UDP:
+
+| Port | Service | Why it can be interesting |
+|---|---|---|
+| 53 | DNS | Name resolution, zone transfer checks, hidden records |
+| 67/68 | DHCP | Network info, sometimes static leases |
+| 69 | TFTP | Often misconfigured, sometimes serves firmware/configs |
+| 123 | NTP | Version info, monitoring interfaces |
+| 161 | SNMP | **The big one** — community strings, full config exposure |
+| 162 | SNMP trap | Rarely a target |
+| 500 | IPsec/IKE | Version info, device fingerprint |
+| 514 | Syslog | Log access if open |
+| 1900 | SSDP | Device discovery, UPnP info |
+| 5353 | mDNS | Hostname/service discovery on local networks |
+
+An open UDP port can expose more than any TCP service. SNMP with a default community string is a classic lab finding that hands you system information without any exploitation.
+
+## Why UDP scans are slow
+
+TCP establishes a handshake, so Nmap knows immediately whether a port is open. UDP has no handshake. Nmap must send a probe and wait for either:
+
+- a **response** (rare — services usually only reply to well-formed requests), or
+- an **ICMP port-unreachable** message (proving the port is closed), or
+- **nothing** (the port may be open, filtered, or rate-limited).
+
+Because the "nothing" case is common, Nmap must wait out the timeout on each unresponsive port, and it typically probes ports one at a time to avoid false negatives. Multiply that by 65535 ports and a full UDP scan of a single host can take a very long time.
+
+<Alert variant="info" title="Rate limiting is real">
+  Many hosts rate-limit ICMP unreachable responses. A fast UDP sweep can overwhelm the target and cause it to stop answering unreachable messages, which makes every remaining port look <code>open|filtered</code> — a useless result. Slower scans return more accurate results.
+</Alert>
+
+## Interpreting `open` and `open|filtered`
+
+- **`open`** — Nmap received a real response. You have a confirmed UDP service. Enumerate it immediately.
+- **`open|filtered`** — Nmap cannot tell if the port is open (a service quietly ignoring the probe) or filtered (a firewall dropping packets). This is the *default-looking* result for most UDP ports.
+
+**Do not move on from `open|filtered` without thought.** Try a targeted probe for the specific protocol on that port — for example, send a real SNMP GET to 161, a DNS query to 53, an NTP request to 123. If the service responds, it was open all along.
+
+## The basic command
+
+<CodeBlock
+  lang="bash"
+  title="UDP scan"
+  code={`nmap -sU 10.10.10.42`}
+/>
+
+- **Purpose:** Find open UDP ports on common services.
+- **When to use:** After TCP mapping, on every host worth your time.
+- **Important options:** `-sV` to identify responding services; `-oA` to save.
+- **What to look for:** `open` states, and `open|filtered` ports you can probe.
+- **Limitations:** Default covers only common UDP ports; slow; ambiguous results.
+
+## Targeted UDP scanning (the practical approach)
+
+A full 65535-port UDP scan is a marathon you usually do not need. In labs and exams, the play is to hit the ports most likely to matter:
+
+<CodeBlock
+  lang="bash"
+  title="Top UDP ports"
+  code={`nmap -sU --top-ports 100 -sV -oA scans/udp-top 10.10.10.42`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="Explicit service ports"
+  code={`nmap -sU -p53,123,161,500,514,1900 -sV 10.10.10.42`}
+/>
+
+**When a targeted scan is preferable to scanning every UDP port:**
+
+- You are confirming a hypothesis (e.g., "this network uses SNMP" → probe 161).
+- You are limited on time or target tolerance.
+- You already know the host's role (a DNS server → probe 53; a network device → probe 161/500/1900).
+- You want to avoid noisy full-range sweeps on a busy network.
+
+**When a full UDP scan is justified:** a single high-value host with no TCP findings, where missing a UDP-only service would leave the host unexamined.
+
+## Following up an open UDP port
+
+Once you have an `open` state, switch from scanning to protocol enumeration:
+
+<CodeBlock
+  lang="bash"
+  title="SNMP on an open 161/udp"
+  code={`snmpwalk -v2c -c public 10.10.10.42 system
+snmp-check 10.10.10.42`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="DNS on an open 53/udp"
+  code={`dig @10.10.10.42 target.local ANY
+dig @10.10.10.42 target.local AXFR`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="NTP on an open 123/udp"
+  code={`ntpq -c version 10.10.10.42
+ntpdate -q 10.10.10.42`}
+/>
+
+The protocol matters more than the scanner: knowing SNMP is open is only useful if you then try the community strings and walk the OID tree.
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `nmap -sU TARGET` | UDP scan of common ports | open / open\|filtered list | Probe interesting ports |
+| `nmap -sU --top-ports 100 -sV TARGET` | Top UDP ports with versions | Confirmed services + versions | Protocol enumeration |
+| `nmap -sU -p53,123,161 TARGET` | Specific UDP ports | State of chosen ports | Targeted protocol tools |
+| `nmap -sU -p- --min-rate 1000 TARGET` | Full UDP range (slow) | Complete UDP picture | Reserve for single high-value hosts |
+| `snmpwalk -v2c -c public TARGET` | SNMP walk | Full SNMP tree (if community works) | Collect users, configs, routes |
+| `dig @TARGET domain AXFR` | DNS zone transfer attempt | Full zone (if allowed) | Enumerate hosts |
+
+## Common mistakes
+
+- **Skipping UDP entirely** and calling the TCP scan "complete".
+- **Reading `open|filtered` as either definitely-open or definitely-closed.** It is a lead.
+- **Running a full UDP range scan as your first UDP move** on a large network.
+- **Using `-T5` on UDP** — high speed causes rate-limit false negatives.
+- **Not following up** confirmed UDP ports with protocol tools.
+- **Missing SNMP** — the single most useful UDP service in many lab networks.
+
+## Related guides
+
+- [Nmap Fundamentals](/guides/info-gathering/nmap-fundamentals) — UDP scanning in the context of the other scan types.
+- [Nmap Scanning Methodology](/guides/info-gathering/nmap-scanning-methodology) — where UDP fits in the phased workflow.
+- [Service & Version Enumeration](/guides/info-gathering/service-version-enumeration) — how to handle the services you find.
+- [Enumeration Methodology](/guides/info-gathering/enumeration-methodology) — the decisions around every open port.

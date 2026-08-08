@@ -1,0 +1,110 @@
+---
+title: Enumeration Checklist
+description: The complete interactive enumeration checklist — from target identification to documented findings — for every host you work through.
+section: info-gathering
+phase: 1
+order: 17
+difficulty: beginner
+draft: false
+tags: ['checklist', 'methodology', 'revision']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import Checklist from '../../../components/ui/Checklist.astro';
+
+## How to use this checklist
+
+Work this list for **every host** you take on in a lab. It is the distilled version of the whole [information gathering](/guides/info-gathering) section: complete the steps in order, tick them as you go, and your notes will contain everything you need for the next phase.
+
+<Alert variant="info" title="Progress is saved">
+  This checklist stores its state <strong>locally in your browser</strong>. Refresh the page and your ticks survive. Use the Reset button to start a fresh host.
+</Alert>
+
+## The full checklist
+
+<Checklist
+  id="enumeration-checklist"
+  title="Host enumeration checklist"
+  items={[
+    'Identify target — exact IPs/CIDRs, domains, and scope confirmed',
+    'Host discovery — confirm the host is alive (-sn / -Pn / netdiscover)',
+    'TCP scan — full -p- --open port map, saved with -oA',
+    'Full port scan — revisit anything the triage scan missed',
+    'UDP consideration — targeted -sU on 53,123,161,500,514,1900',
+    'Service detection — -sV on every open port',
+    'Version detection — note exact versions, confirm odd banners manually',
+    'NSE — default scripts (-sC) plus service-specific scripts',
+    'Web enumeration — if 80/443: dirs, files, vhosts, tech, robots.txt',
+    'SMB enumeration — if 139/445: shares, users, null sessions',
+    'DNS enumeration — if 53: records, zone transfer, subdomains',
+    'Authentication surface — note every login, service, and endpoint',
+    'Interesting files — backups, configs, .git, downloads',
+    'Potential credentials — passwords, hashes, keys found anywhere',
+    'Potential attack paths — summarize what is worth testing next',
+    'Document findings — complete host fact sheet saved for later',
+  ]}
+/>
+
+## What each item really means
+
+- **Identify target** — You know exactly what you are allowed to touch. No scope guesswork.
+- **Host discovery** — Confirm the host is alive; use `-Pn` if it hides from probes (see [Host Discovery](/guides/info-gathering/host-discovery)).
+- **TCP scan** — The full `-p- --open` map. The default top-1000 scan is *not* this step.
+- **Full port scan** — A second pass or slower timing when the first was fast and noisy.
+- **UDP consideration** — A deliberate, targeted UDP check, not just TCP (see [UDP Scanning](/guides/info-gathering/udp-scanning)).
+- **Service detection** — Turn port numbers into service names with `-sV`.
+- **Version detection** — Exact versions matter more than names; confirm banners manually when in doubt.
+- **NSE** — Default scripts plus the scripts that match your services (see [NSE Scripts](/guides/info-gathering/nse-scripts)).
+- **Web enumeration** — Every check in [Web Service Enumeration](/guides/info-gathering/web-service-enumeration).
+- **SMB enumeration** — Shares, users, and null-session behaviour (see [SMB / NetBIOS Enumeration](/guides/info-gathering/smb-netbios-enumeration)).
+- **DNS enumeration** — Records, transfer attempts, and subdomain discovery.
+- **Authentication surface** — The complete list of login points across all services.
+- **Interesting files** — Anything downloadable or readable that should not be public.
+- **Potential credentials** — Every password, hash, or key that surfaced during enumeration.
+- **Potential attack paths** — The honest summary of what is worth testing next.
+- **Document findings** — A written fact sheet per host: IP, ports, services, versions, notes.
+
+## Quick command cheat-sheet for the checklist
+
+<CodeBlock
+  lang="bash"
+  title="The essential commands, in checklist order"
+  code={`# Scope + discovery
+nmap -sn 10.10.10.0/24
+netdiscover -i tun0 -r 10.10.10.0/24
+
+# Full TCP map
+nmap -p- --open -T4 -oA scans/target-full 10.10.10.42
+
+# Versions + scripts
+nmap -sC -sV -p22,80,445 -oA scans/target-versions 10.10.10.42
+
+# Targeted UDP
+nmap -sU -p53,123,161 --top-ports 100 -oA scans/target-udp 10.10.10.42
+
+# Web
+gobuster dir -u http://10.10.10.42 -w /usr/share/wordlists/dirb/common.txt -x php,bak
+ffuf -u http://10.10.10.42/ -H "Host: FUZZ.corp.local" -w subdomains.txt -fs 1234
+
+# SMB
+smbclient -L //10.10.10.42/ -N
+enum4linux-ng -A 10.10.10.42`}
+/>
+
+## Common mistakes (even with a checklist)
+
+- **Ticking boxes without following the leads.** The checklist is complete only when each item's *result* is in your notes.
+- **Skipping the UDP step because it is slow.** One SNMP find beats an hour of fast TCP noise.
+- **Marking "version detection" done with a single top-1000 scan.**
+- **Forgetting the "document findings" step** — the notes are the deliverable, not the scans.
+- **Using the checklist as a substitute for thinking.** It orders the work; the [decision tree](/guides/info-gathering/enumeration-methodology) does the thinking.
+
+## Related guides
+
+- [Enumeration Methodology](/guides/info-gathering/enumeration-methodology) — the decision tree behind every checkbox.
+- [Nmap Scanning Methodology](/guides/info-gathering/nmap-scanning-methodology) — the scanning workflow in detail.
+- [Reconnaissance Fundamentals](/guides/info-gathering/recon-fundamentals) — why each step exists.
+- Continue to the [Exploitation](/guides/exploitation) section once your notes are complete.

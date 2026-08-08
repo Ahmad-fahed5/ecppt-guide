@@ -1,0 +1,169 @@
+---
+title: Service & Version Enumeration
+description: Why identifying services and versions matters, how different ports lead down different enumeration paths, and how to read service results.
+section: info-gathering
+phase: 1
+order: 5
+difficulty: intermediate
+draft: false
+tags: ['enumeration', 'service-detection', 'version-detection']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## Why service identification matters
+
+A port number is only a *suggestion*. `445/tcp` is usually SMB, but it could be anything — an admin filtered it, a custom service hijacked it, or the service moved. The only way to know what you are dealing with is to interact with the service and identify it.
+
+The goal of this guide is to build a **fact sheet per host**:
+
+| Fact | Example | How confident |
+|---|---|---|
+| Port | 445 | High (it responded) |
+| Protocol | TCP | High |
+| Service | SMB (microsoft-ds / netbios-ssn) | Medium-high after banner |
+| Version | Samba 4.17.9 | High after `-sV` |
+| Software fingerprint | Samba on Linux (not Windows) | High after version + scripts |
+| Attack surface | Share listing, guest access, known Samba issues | Determined by further enumeration |
+
+Everything downstream — vulnerability research, exploitation, reporting — hangs off this table. That is why version detection is worth the extra time.
+
+## The example that teaches the lesson
+
+Consider this `-sV` result:
+
+<CodeBlock
+  lang="text"
+  title="Three services, three paths"
+  code={`PORT    STATE SERVICE  VERSION
+22/tcp  open  ssh      OpenSSH 8.2p1 Ubuntu 4ubuntu0.5 (Ubuntu Linux; protocol 2.0)
+80/tcp  open  http     Apache httpd 2.4.41
+445/tcp open  netbios-ssn Samba smbd 4.13.17`}
+/>
+
+Each port leads to a **completely different enumeration branch**:
+
+- **22/tcp SSH** → version research (OpenSSH 8.2p1), check for allowed auth methods, look for exposed keys, test default/weak credentials if the scope allows.
+- **80/tcp HTTP** → full [web enumeration](/guides/info-gathering/web-service-enumeration): directories, technologies, endpoints.
+- **445/tcp SMB** → [SMB enumeration](/guides/info-gathering/smb-netbios-enumeration): shares, users, null-session access.
+
+The version strings also answer bigger questions: this is clearly **Ubuntu Linux** (both the OpenSSH and Samba banners say so), which shapes every later decision about privilege escalation and tools.
+
+## How services connect to attack surface
+
+Once you know the service and version, enumerate *with the protocol*, not just with scanners:
+
+- **SSH** — which auth methods are allowed? (`ssh -v`, `nmap --script ssh2-enum-algos`)
+- **HTTP** — what directories, files, vhosts, and technologies exist?
+- **SMB** — which shares are readable, which users exist, is anonymous access allowed?
+- **DNS** — does the server allow zone transfers? What names resolve?
+- **SMTP** — can we enumerate users with VRFY/RCPT?
+- **SNMP** — is the community string default, and what does `snmpwalk` expose?
+- **NFS** — which shares are exported, and to whom? (`showmount -e`)
+
+Do not stop at the Nmap line. The Nmap line is the invitation; the protocol enumeration is the conversation.
+
+<Alert variant="warning" title="An open port is not a vulnerability">
+  Finding that a service is running (or even that it has an old version) is <strong>enumeration</strong>, not proof of vulnerability. A version matching a known CVE is a lead that must be validated — by checking the configuration, confirming the exact version, and testing in a controlled way. Never report a version-to-CVE match as an exploited vulnerability.
+</Alert>
+
+## The port / service → investigation table
+
+Use this as a quick map when you see these common services:
+
+| Port(s) | Service | Investigate next |
+|---|---|---|
+| 21 | FTP | Anonymous login, version, writable directories, `ls` for readable files |
+| 22 | SSH | Allowed auth methods, weak/default credentials, version CVEs |
+| 25 / 587 | SMTP | Version, user enumeration (VRFY/RCPT), open relay checks |
+| 53 (TCP/UDP) | DNS | Zone transfer attempt, name discovery, reverse lookups |
+| 80 / 443 | HTTP / HTTPS | [Web enumeration](/guides/info-gathering/web-service-enumeration): directories, tech, vhosts |
+| 445 | SMB | [SMB enumeration](/guides/info-gathering/smb-netbios-enumeration): shares, users, null sessions |
+| 139 | NetBIOS | Workgroup/domain, machine names, shares |
+| 389 / 636 | LDAP / LDAPS | Anonymous bind, base DN, exposed attributes (users, groups) |
+| 3389 | RDP | Version, NLA state, weak credentials in scope |
+| 5985 / 5986 | WinRM | Windows Remote Management — weak credentials, valid user tests |
+| 3306 | MySQL | Version, anonymous access, weak credentials |
+| 1433 | MSSQL | Version, auth mode, default credentials, linked servers |
+| 161/162 (UDP) | SNMP | Default community strings, `snmpwalk` full OID tree |
+| 2049 | NFS | `showmount -e`, exported shares and no_root_squash |
+| 6379 | Redis | Unauthenticated access, `info` banner |
+| 27017 | MongoDB | Unauthenticated access, database list |
+| 8080 / 8443 | HTTP(S) alt | Often admin consoles or app servers — full web enumeration |
+| 8000 / 8888 | Dev servers | Django, Jupyter, proxy UIs — enumerate the app |
+
+Do **not** assume any of these is vulnerable. The table tells you *what to check*, not *what is exploitable*. Confirmation comes from careful, in-scope testing.
+
+## Banner grabbing with `-sV`
+
+`-sV` is the standard way to get versions at scale:
+
+<CodeBlock
+  lang="bash"
+  title="Version detection with intensity"
+  code={`nmap -sV -sC -p- --version-intensity 7 -oA target 10.10.10.42`}
+/>
+
+- `--version-intensity` (0–9) controls how many probes Nmap tries; 7 is a good middle ground for lab work.
+- Combine with `-sC` to get default script results in the same pass.
+- Add `-p-` so you do not miss the version of some obscure high port.
+
+## Manual banner grabbing
+
+Nmap is not the only way. Confirming a banner directly is quick and occasionally reveals things `-sV` skips:
+
+<CodeBlock
+  lang="bash"
+  title="Manual banner grab over netcat"
+  code={`nc -v -n 10.10.10.42 22
+(UNKNOWN) [10.10.10.42] 22 (ssh) open
+SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.5`}
+/>
+
+For HTTP, a simple curl shows the server header and often the tech stack:
+
+<CodeBlock
+  lang="bash"
+  title="Checking HTTP headers"
+  code={`curl -I http://10.10.10.42
+
+HTTP/1.1 200 OK
+Date: Sat, 08 Aug 2026 10:00:00 GMT
+Server: Apache/2.4.41 (Ubuntu)
+X-Powered-By: PHP/7.4.3
+...`}
+/>
+
+Every header is a lead: the `Server` line names the web server and OS, `X-Powered-By` leaks the language, and cookies can name the framework (see [Web Service Enumeration](/guides/info-gathering/web-service-enumeration)).
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `nmap -sV TARGET` | Version detection on common ports | Service + version per port | Research those versions |
+| `nmap -sV -p- TARGET` | Versions on all ports | Versions incl. high ports | Enumerate the rare services |
+| `nmap -sV --version-intensity 9 TARGET` | Maximum probing | Most detailed version guess | Confirm manually |
+| `nc -v -n TARGET PORT` | Direct banner grab | Raw banner | Compare with `-sV` result |
+| `curl -I http://TARGET` | HTTP headers | Server/tech headers | Web enumeration |
+| `showmount -e TARGET` | NFS export list | Exported shares | Mount and inspect |
+| `dig AXFR @TARGET domain` | DNS zone transfer | Full zone (if allowed) | Enumerate hosts from names |
+
+## Common mistakes
+
+- **Stopping at the service name** and never collecting versions.
+- **Treating a version match as a confirmed vulnerability** instead of a lead to validate.
+- **Ignoring uncommon ports** because the service is unfamiliar — that is where labs hide the interesting stuff.
+- **Assuming the port number equals the service.** Confirm by interaction.
+- **Not checking UDP services** for versions (many default `open|filtered`).
+- **Forgetting to save** the version output for the report.
+
+## Related guides
+
+- [Nmap Fundamentals](/guides/info-gathering/nmap-fundamentals) — `-sV` in context with the other scan types.
+- [NSE Scripts](/guides/info-gathering/nse-scripts) — scripts that extract more from each service.
+- [SMB / NetBIOS Enumeration](/guides/info-gathering/smb-netbios-enumeration) — what to do when 139/445 appears.
+- [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) — what to do when 80/443 appears.
+- [Enumeration Methodology](/guides/info-gathering/enumeration-methodology) — the decision tree that uses this table.

@@ -1,0 +1,157 @@
+---
+title: Network Discovery & ARP
+description: How ARP works, how local network discovery uses it, and how to map interfaces, broadcast domains, and neighbors with standard Linux tools.
+section: info-gathering
+phase: 1
+order: 8
+difficulty: beginner
+draft: false
+tags: ['arp', 'network-discovery', 'linux', 'networking']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## The local network picture
+
+Every host on a network segment is reachable by **IP**, but every frame travels between **MAC addresses**. When your machine wants to talk to `10.10.10.42` on the same segment, it must first find that host's MAC address. That is what ARP does — and it is also why ARP is a perfect discovery tool.
+
+Understanding the local picture — your interfaces, your segment, your neighbors — is the foundation for [Host Discovery](/guides/info-gathering/host-discovery) and for tools like [Netdiscover](/guides/info-gathering/netdiscover).
+
+## What ARP is
+
+The Address Resolution Protocol maps **IP addresses to MAC addresses** on a local segment:
+
+1. Host A wants to reach 10.10.10.42.
+2. Host A broadcasts an ARP request: *"Who has 10.10.10.42? Tell 10.10.10.1."*
+3. Every host on the segment receives the broadcast; the one with that IP replies with its MAC address.
+4. Host A caches the mapping and sends the frame.
+
+Key consequences for discovery:
+
+- **Every alive host on the segment must answer ARP** to function at all — even hosts that filter ICMP and TCP. A host that ignores ping still answers ARP.
+- **ARP works only within the local broadcast domain** (your segment). It cannot discover hosts behind a router.
+- **ARP requests are broadcast**, so an attacker (in an authorized lab) can see which addresses respond without any port scan.
+
+## Broadcast domains and why they matter
+
+A broadcast domain is the set of hosts that receive each other's broadcast frames — typically everything on the same switch segment (or VLAN). ARP requests and broadcasts do not cross routers by default.
+
+Implications:
+
+- ARP-based discovery is limited to your broadcast domain.
+- If a lab has multiple subnets, you need to scan each from a position inside it (or route through it after a foothold — see [Pivoting](/guides/pivoting) later).
+- When you gain a foothold on a compromised host (in a training scenario), that host's local segment becomes your next ARP discovery scope.
+
+## Know your own interfaces first
+
+Before scanning anything, map your own network position:
+
+<CodeBlock
+  lang="bash"
+  title="List all interfaces and addresses"
+  code={`ip a`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="Example output"
+  code={`1: lo: <LOOPBACK,UP,LOWER_UP> ...
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 ...
+    inet 10.10.14.5/24 scope global eth0
+    inet6 fe80::...
+3: tun0: <POINTCARRIER,UP,LOWER_UP> ...
+    inet 10.10.10.2/24 scope global tun0`}
+/>
+
+The important lines: your IPv4 addresses (`inet`) and their network prefixes (`/24`). In a VPN lab, `tun0` is usually the interface that connects to the target network, while `eth0` may be your own LAN.
+
+Confirm your routing:
+
+<CodeBlock
+  lang="bash"
+  title="Show the routing table"
+  code={`ip route`}
+/>
+
+This tells you which networks are directly reachable (routes through `dev tun0`) and which require a gateway. If the target range routes through `tun0`, you are on the right segment for ARP discovery.
+
+## Viewing and manipulating the ARP table
+
+As your machine talks to neighbors, it builds an ARP cache. Check what it has already learned:
+
+<CodeBlock
+  lang="bash"
+  title="Neighbor table"
+  code={`ip neigh`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="Classic ARP table"
+  code={`arp -a`}
+/>
+
+Both show IP → MAC mappings and their state (`REACHABLE`, `STALE`, `FAILED`). A `REACHABLE` entry is a confirmed live host — a useful and completely passive way to start building your host list before you scan anything.
+
+## Passive vs active local discovery
+
+- **Passive:** listen and collect ARP traffic already on the wire. Tools like `tcpdump` and netdiscover's passive mode (`netdiscover -p`) watch for address claims from all hosts.
+- **Active:** send your own ARP requests to every address in the range (an ARP sweep). Nmap does this automatically with `-sn` on the local segment; netdiscover does it with `-r`.
+
+Active ARP sweeps are fast and reliable precisely because every live host must answer. On a local segment they are usually the best first move.
+
+<CodeBlock
+  lang="bash"
+  title="Quick ARP sweep"
+  code={`nmap -sn -PR 10.10.10.0/24`}
+/>
+
+## Practical discovery commands
+
+<CodeBlock
+  lang="bash"
+  title="Neighbor discovery on the segment"
+  code={`# What have we already learned?
+ip neigh
+
+# Ping sweep forces ARP lookups (and populates the cache)
+nmap -sn 10.10.10.0/24
+
+# Check the cache again — now populated with MACs
+arp -a`}
+/>
+
+Put together, the sequence builds the local map: your interfaces (`ip a`), your reachable networks (`ip route`), your confirmed neighbors (`ip neigh`), and finally a full sweep of the segment.
+
+## The vendor trick
+
+MAC addresses contain an **OUI** — the first three octets identify the vendor (for example `00:50:56` is VMware, `08:00:27` is VirtualBox, `00:15:5d` is Hyper-V). Tools like netdiscover and Nmap will label MACs with their vendor. In a lab this can instantly reveal which hosts are VMs and often which are the actual targets vs. infrastructure.
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `ip a` | Show interfaces and addresses | Your network position | Choose the right interface to scan |
+| `ip route` | Show routing | Which networks are reachable | Scan directly reachable segments |
+| `ip neigh` | Show the ARP/neighbor cache | Confirmed live neighbors + MACs | Port scan the confirmed hosts |
+| `arp -a` | Show ARP cache (classic) | Same as `ip neigh` | Cross-check MAC vendors |
+| `nmap -sn -PR RANGE` | Active ARP sweep | All live hosts on the segment | Full port scan survivors |
+| `netdiscover -r RANGE` | ARP sweep with vendor labels | Hosts + MAC vendors | Identify VMs/targets |
+
+## Common mistakes
+
+- **Running ARP-based tools against remote networks** (behind a router) where they cannot work.
+- **Forgetting to check `ip a`/`ip route` first** and scanning through the wrong interface.
+- **Ignoring the ARP cache** — it is free, passive intelligence you already have.
+- **Treating MAC vendors as definitive OS identification.** The vendor tells you the NIC manufacturer, not the operating system.
+- **Assuming one broadcast domain.** Multiple segments require discovery from each.
+
+## Related guides
+
+- [Host Discovery](/guides/info-gathering/host-discovery) — ARP as one of the three discovery techniques.
+- [Netdiscover](/guides/info-gathering/netdiscover) — the dedicated ARP discovery tool.
+- [Reconnaissance Fundamentals](/guides/info-gathering/recon-fundamentals) — where local network mapping fits in the pipeline.
+- Later: [Pivoting & Port Forwarding](/guides/pivoting) for reaching segments you cannot touch directly.

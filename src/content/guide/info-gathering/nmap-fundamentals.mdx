@@ -1,0 +1,316 @@
+---
+title: Nmap Fundamentals
+description: The essential Nmap reference — scanning techniques, port states, service and version detection, timing, and output formats, with explained commands.
+section: info-gathering
+phase: 1
+order: 3
+difficulty: beginner
+draft: false
+tags: ['nmap', 'port-scanning', 'tcp', 'udp']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## What Nmap is
+
+Nmap (Network Mapper) is the de-facto standard tool for host discovery and port scanning. It sends crafted packets to a target and infers, from the responses (or lack of them), which ports are open, which services are running, and sometimes which operating system is behind them.
+
+It is used for **authorized reconnaissance only**. In a lab, running Nmap against your own machines or the provided training range is the normal workflow.
+
+## TCP scanning techniques
+
+### SYN scan (`-sS`)
+
+The default and most popular technique when run with sufficient privileges:
+
+<CodeBlock
+  lang="bash"
+  title="SYN scan"
+  code={`nmap -sS TARGET`}
+/>
+
+Nmap sends a TCP SYN packet (the first step of a normal TCP handshake) and watches the response:
+
+- **SYN/ACK** → the port is open (someone is trying to complete the handshake).
+- **RST** → the port is closed.
+- **No response or ICMP unreachable** → filtered.
+
+Because the handshake is never completed, a SYN scan is fast and often leaves less on the wire than a full connection. It is also called a *half-open* scan.
+
+### Connect scan (`-sT`)
+
+A full TCP handshake, like a normal application connection:
+
+<CodeBlock
+  lang="bash"
+  title="Connect scan"
+  code={`nmap -sT TARGET`}
+/>
+
+This is the default when you do not have root privileges, and it uses the operating system's own TCP stack. It is slower and noisier than `-sS`, but it works without privileges and is more likely to complete against hosts that dislike raw packets. In a training environment the practical difference is usually small.
+
+### Other scan types (brief)
+
+Nmap supports more (FIN, NULL, Xmas, ACK, window) that exploit subtle TCP behaviours to bypass simple filters. They are rarely needed in lab environments, and their results can be misleading, so treat them as advanced topics and stick to SYN/connect for most work.
+
+## UDP scanning (`-sU`)
+
+UDP has no handshake, so Nmap must guess from responses:
+
+<CodeBlock
+  lang="bash"
+  title="UDP scan"
+  code={`nmap -sU TARGET`}
+/>
+
+UDP scans are much slower and noisier than TCP scans. See [UDP Scanning](/guides/info-gathering/udp-scanning) for the full treatment.
+
+## Port states
+
+Every port ends up in one of these states:
+
+| State | Meaning |
+|---|---|
+| `open` | A service is accepting connections/packets. |
+| `closed` | The port is reachable but nothing listens on it. |
+| `filtered` | A firewall, filter, or network rule blocks the probe; Nmap cannot tell if it is open. |
+| `unfiltered` | The port is reachable but Nmap cannot determine open/closed (rare). |
+| `open\|filtered` | Nmap cannot distinguish open from filtered (common with UDP and some techniques). |
+| `closed\|filtered` | Nmap cannot distinguish closed from filtered (rare). |
+
+The most important habit: **an `open|filtered` port is a lead, not a dead end.** Especially with UDP, a port that looks `open|filtered` may be an open service that quietly drops malformed probes.
+
+## Service and version detection (`-sV`)
+
+`-sV` probes open ports to determine the actual service and version:
+
+<CodeBlock
+  lang="bash"
+  title="Version detection"
+  code={`nmap -sV TARGET`}
+/>
+
+Instead of guessing from the port number alone (which is only a hint), Nmap connects and reads banners, and sends probe strings to identify the software. The output changes from:
+
+<CodeBlock
+  lang="text"
+  title="Port numbers alone"
+  code={`PORT    STATE SERVICE
+22/tcp  open  ssh
+80/tcp  open  http
+445/tcp open  microsoft-ds`}
+/>
+
+...to something actionable:
+
+<CodeBlock
+  lang="text"
+  title="After -sV"
+  code={`PORT    STATE SERVICE VERSION
+22/tcp  open  ssh     OpenSSH 9.2p1 Debian 2+deb12u2 (protocol 2.0)
+80/tcp  open  http    Apache httpd 2.4.57
+445/tcp open  netbios-ssn Samba smbd 4.17.9`}
+/>
+
+The version string is what makes vulnerability research possible. See [Service & Version Enumeration](/guides/info-gathering/service-version-enumeration) for how to use this.
+
+## OS detection (`-O`)
+
+<CodeBlock
+  lang="bash"
+  title="OS detection"
+  code={`nmap -O TARGET`}
+/>
+
+`-O` fingerprints the operating system from packet behaviour (TTL values, window sizes, TCP options). The result is a guess, reported with a confidence percentage. Use it as a hypothesis:
+
+<CodeBlock
+  lang="text"
+  title="OS detection output"
+  code={`Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.6
+Network Distance: 1 hop`}
+/>
+
+Requires root. It can be noisy and sometimes wrong; confirm with services and banners (for example, an SMB version string often gives away Windows more reliably than `-O`).
+
+## Timing and performance
+
+Nmap has timing templates from `-T0` (paranoid) to `-T5` (insane), defaulting to `-T3`:
+
+| Template | Use case |
+|---|---|
+| `-T0` / `-T1` | Extremely slow, aimed at avoiding detection — rarely practical |
+| `-T2` | Polite, reduces network load |
+| `-T3` | Default, balanced |
+| `-T4` | Aggressive — faster, higher packet rate, good for labs |
+| `-T5` | Insane — max speed, can drop packets and miss results |
+
+Practical lab advice: use `-T4` for most scanning. If results look incomplete (ports missing that you expect), drop to `-T3` or rescan. More specific controls include `--min-rate`, `--max-rate`, and `--host-timeout`.
+
+## Output formats
+
+Always save your scan results. You will need them for notes, reporting, and re-checking facts hours later.
+
+| Flag | Format | Notes |
+|---|---|---|
+| `-oN file.txt` | Normal | Human-readable text |
+| `-oX file.xml` | XML | Machine-readable, feeds other tools |
+| `-oG file.txt` | Grepable | One line per host, easy to script |
+| `-oA basename` | All three at once | The most common lab choice |
+
+<CodeBlock
+  lang="bash"
+  title="Saving all formats"
+  code={`nmap -sV -oA target 10.10.10.42`}
+/>
+
+## The essential commands, explained
+
+Every command below is a tool for a specific job — pick the one that matches the question you are answering.
+
+### `nmap TARGET`
+
+<CodeBlock
+  lang="bash"
+  title="Default scan"
+  code={`nmap 10.10.10.42`}
+/>
+
+- **Purpose:** Quick reconnaissance of the most common ports.
+- **When to use:** First touch of a host; find out quickly what is exposed.
+- **Important options:** `-T4` to speed it up.
+- **What to look for:** The `PORT STATE SERVICE` table.
+- **Limitations:** Only scans the **top 1000 TCP ports**. Services on higher ports will be completely invisible.
+
+### `nmap -p- TARGET`
+
+<CodeBlock
+  lang="bash"
+  title="Full TCP port range"
+  code={`nmap -p- -T4 10.10.10.42`}
+/>
+
+- **Purpose:** Scan all 65535 TCP ports.
+- **When to use:** Always, once you know the host is worth your time. The top-1000 scan is for triage; `-p-` is for completeness.
+- **Important options:** `-T4` or `--min-rate` to keep it fast; `-oA fullscan` to save.
+- **What to look for:** Open ports that the default scan missed (high ports, custom services).
+- **Limitations:** Slower than the default scan; noisy on busy networks.
+
+### `nmap -sS TARGET`
+
+<CodeBlock
+  lang="bash"
+  title="SYN scan"
+  code={`nmap -sS TARGET`}
+/>
+
+- **Purpose:** Stealthier, faster TCP scan using half-open handshakes.
+- **When to use:** The default choice when you have root; the primary TCP scan method.
+- **Important options:** Combine with `-p-`, `-T4`, `-oA`.
+- **What to look for:** Reliable `open` states without completing connections.
+- **Limitations:** Requires raw packet privileges; some environments treat it like any other scan.
+
+### `nmap -sT TARGET`
+
+<CodeBlock
+  lang="bash"
+  title="Connect scan"
+  code={`nmap -sT TARGET`}
+/>
+
+- **Purpose:** Full TCP handshake scan; works without privileges.
+- **When to use:** When you cannot run `-sS` (no root), or when the target misbehaves with raw scans.
+- **Important options:** Same set as `-sS`.
+- **What to look for:** The same `PORT STATE SERVICE` table.
+- **Limitations:** Slower and noisier; completes the handshake so it is visible in target logs.
+
+### `nmap -sU TARGET`
+
+<CodeBlock
+  lang="bash"
+  title="UDP scan"
+  code={`nmap -sU TARGET`}
+/>
+
+- **Purpose:** Find open UDP ports and services.
+- **When to use:** After TCP is mapped, to avoid missing UDP-only services (DNS, SNMP, NTP, TFTP).
+- **Important options:** `--top-ports`, `-sV` on candidates.
+- **What to look for:** `open` states, and `open|filtered` ports worth a targeted probe.
+- **Limitations:** Slow; many results are ambiguous. See [UDP Scanning](/guides/info-gathering/udp-scanning).
+
+### `nmap -sC -sV TARGET`
+
+<CodeBlock
+  lang="bash"
+  title="Default scripts + version detection"
+  code={`nmap -sC -sV -p- TARGET`}
+/>
+
+- **Purpose:** The workhorse combination — detect service versions and run the safe default scripts.
+- **When to use:** Standard practice on every open port you care about.
+- **Important options:** `-p-` for the full range; `-oA` to save.
+- **What to look for:** Version strings, script results (banners, SSL info, SMB info, web tech).
+- **Limitations:** `-sC` runs only "safe" scripts by default; it is enumeration, not exploitation.
+
+### `nmap -O TARGET`
+
+<CodeBlock
+  lang="bash"
+  title="OS detection"
+  code={`nmap -O TARGET`}
+/>
+
+- **Purpose:** Guess the target operating system.
+- **When to use:** When you need a starting hypothesis about the OS family.
+- **Important options:** Requires root; combine with `-sV` for confirmation.
+- **What to look for:** The `Running:` line and confidence percentage.
+- **Limitations:** A guess, not proof; easily wrong on patched or custom hosts.
+
+### `nmap -A TARGET`
+
+<CodeBlock
+  lang="bash"
+  title="Aggressive scan"
+  code={`nmap -A TARGET`}
+/>
+
+- **Purpose:** Enable OS detection, version detection, script scanning, and traceroute in one pass.
+- **When to use:** A single-host deep dive when you want everything at once.
+- **Important options:** Consider `-p-` for full coverage.
+- **What to look for:** The combined picture — versions, OS guess, scripts, routes.
+- **Limitations:** Noisy and slow; combines aggressive techniques that are not always appropriate. On a big range, prefer phased scanning (see [Nmap Scanning Methodology](/guides/info-gathering/nmap-scanning-methodology)).
+
+## Quick command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `nmap TARGET` | Triage scan of top 1000 TCP ports | Initial port list | Full scan of anything interesting |
+| `nmap -p- -T4 TARGET` | All 65535 TCP ports | Complete port list | Version detection on open ports |
+| `nmap -sS TARGET` | Half-open SYN scan | Open/closed/filtered states | Confirm with `-sT` if odd |
+| `nmap -sT TARGET` | Full connect scan | Open ports (no root needed) | Enumerate services |
+| `nmap -sU --top-ports 100 TARGET` | UDP scan of common ports | Open / open\|filtered UDP | Targeted UDP probes |
+| `nmap -sC -sV TARGET` | Scripts + versions | Service + version details | [Service enumeration](/guides/info-gathering/service-version-enumeration) |
+| `nmap -O TARGET` | OS fingerprint | OS hypothesis | Confirm via services |
+| `nmap -A TARGET` | Everything at once | Full picture | Review results critically |
+
+## Common mistakes
+
+- **Only ever running the default top-1000 scan.** Higher ports hide custom services and admin panels.
+- **Ignoring UDP entirely** and assuming TCP-only coverage is complete.
+- **Running `-A` on every host in a range** — slow, noisy, and against methodology.
+- **Not saving output with `-oA`** and losing the evidence you needed for reporting.
+- **Trusting `-O` as fact** instead of confirming with services.
+- **Forgetting `-Pn` when a host ignores host-discovery probes.**
+
+## Related guides
+
+- [Host Discovery](/guides/info-gathering/host-discovery) — find the hosts before you scan them.
+- [Nmap Scanning Methodology](/guides/info-gathering/nmap-scanning-methodology) — how to combine these commands in order.
+- [NSE Scripts](/guides/info-gathering/nse-scripts) — what `-sC` actually runs and how to go further.
+- [UDP Scanning](/guides/info-gathering/udp-scanning) — UDP in depth.
+- [Service & Version Enumeration](/guides/info-gathering/service-version-enumeration) — what to do with every version string.

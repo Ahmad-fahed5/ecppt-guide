@@ -1,0 +1,164 @@
+---
+title: Host Discovery
+description: Finding which hosts are alive on a network using ICMP, TCP, and ARP, and understanding when host discovery should be skipped.
+section: info-gathering
+phase: 1
+order: 2
+difficulty: beginner
+draft: false
+tags: ['nmap', 'icmp', 'arp', 'host-discovery']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## What host discovery is
+
+Host discovery answers one question: **which hosts on a network range are alive?** Before you scan ports, you want a short list of targets. Scanning every port on every IP in a `/16` is a waste of time; finding the handful of live hosts first turns a mountain into a list.
+
+In most lab and exam environments you start with a network range (for example `10.10.10.0/24`) and your first job is to map which addresses respond.
+
+## Discovery techniques
+
+There are three practical approaches, and they work at different layers of the network stack.
+
+### ICMP discovery
+
+The classic approach: send ICMP Echo Requests (ping) to every address in the range. Linux and Windows hosts that do not block ICMP respond, and Nmap reports them as alive.
+
+<CodeBlock
+  lang="bash"
+  title="ICMP ping sweep"
+  code={`nmap -sn 10.10.10.0/24`}
+/>
+
+`-sn` tells Nmap to skip the port scan entirely and only report live hosts. By default on a local network, Nmap will actually use ARP for this (see below), and on non-local networks it falls back to ICMP and TCP probes.
+
+### TCP-based discovery
+
+Modern hosts and firewalls increasingly filter ICMP. Nmap's `-sn` is smart about this: it sends a SYN packet to port 443 and an ACK packet to port 80 by default, in addition to ICMP. Any response marks the host as alive. You can make this more aggressive:
+
+<CodeBlock
+  lang="bash"
+  title="TCP-based host discovery"
+  code={`nmap -sn -PS80,443,22 -PA80 -PU53 10.10.10.0/24`}
+/>
+
+- `-PS` sends TCP SYN probes to the listed ports (a `RST` or `SYN/ACK` response means the host is up).
+- `-PA` sends TCP ACK probes.
+- `-PU` sends UDP probes (here DNS port 53).
+
+This matters when ICMP is blocked but TCP services respond.
+
+### ARP discovery
+
+On a local network segment, Nmap does something faster and more reliable than any IP-level probe: it uses ARP. Since every alive host on the local segment must respond to ARP to function at all, an ARP request reliably identifies live hosts — and reveals their **MAC addresses**, which is a bonus (see [Network Discovery & ARP](/guides/info-gathering/network-discovery-arp)).
+
+<CodeBlock
+  lang="bash"
+  title="Forcing ARP discovery on the local network"
+  code={`nmap -sn -PR 10.10.10.0/24`}
+/>
+
+`-PR` forces ARP ping. Nmap uses ARP automatically when the target is on the same layer-2 segment, so you will usually get this behaviour for free.
+
+## When ICMP fails
+
+ICMP is the first thing many administrators and firewalls filter. Do not assume that a non-responsive host is dead:
+
+- **Firewalls drop ICMP** while leaving TCP services open.
+- **Windows hosts** often block inbound ping while running SMB, RDP, or WinRM.
+- **Rate limiting and asymmetric routing** can make pings unreliable.
+- Some hosts **respond slowly** and get missed during a fast sweep.
+
+This is exactly why Nmap's `-sn` combines ICMP with TCP probes. If you suspect a range is under-reported, repeat discovery with `-PS` ports that match common services:
+
+<CodeBlock
+  lang="bash"
+  title="Host discovery when ICMP is filtered"
+  code={`nmap -sn -PS22,80,443,445,3389 10.10.10.0/24`}
+/>
+
+A host that answers a TCP probe on port 445 is alive even if it never answers a ping.
+
+## When host discovery should be skipped
+
+There are cases where `-sn` is the wrong tool and you should go straight to port scanning:
+
+- **You already have a target list.** If the scope is "these 20 IPs", just scan them.
+- **The range is small.** One or two hosts — just scan them directly.
+- **Hosts actively hide.** Hosts that silently drop everything (including TCP) look dead to any probe but may be reachable. This is common in exams designed to test your methodology. If your full TCP scan of a suspicious host shows nothing, it may still be worth a slow full scan.
+- **You are scanning a single IP.** `nmap 10.10.10.42` does host discovery and the port scan in one shot.
+
+<Alert variant="warning" title="Do not trust 'host down' blindly">
+  Nmap prints <code>Host seems down</code> and skips the port scan when no probe is answered. If you have a reason to believe a host exists, scan it directly anyway: <code>nmap -Pn 10.10.10.42</code> skips host discovery and scans every port. This is one of the most important flags in an exam context.
+</Alert>
+
+## Understanding filtered and unreachable hosts
+
+During discovery you will see three categories of behaviour:
+
+| Result | Meaning | What to do |
+|---|---|---|
+| Responds | Host is alive | Port scan it |
+| Silently drops all probes | Could be dead, filtered, or hiding | Try a direct full scan with `-Pn` |
+| Returns ICMP unreachable | Host or network is filtering | Note it; usually not worth chasing in a lab |
+| Responds but you were not allowed to scan it | Out of scope | Stop immediately, document it |
+
+Note the difference between a host that answers nothing and a host that *actively* refuses. `icmp-host-unreachable` messages from a router can also make Nmap report a host as down even when it is not.
+
+## Practical lab example
+
+On a typical authorized lab network:
+
+<CodeBlock
+  lang="bash"
+  title="Step 1 — find live hosts"
+  code={`nmap -sn 10.10.10.0/24
+
+Starting Nmap 7.94 ( https://nmap.org ) at 2026-08-08 10:00
+Nmap scan report for 10.10.10.10
+Host is up (0.0020s latency).
+Nmap scan report for 10.10.10.11
+Host is up (0.0019s latency).
+Nmap scan report for 10.10.10.42
+Host is up (0.0021s latency).
+Nmap done: 256 IP addresses (3 hosts up) scanned in 2.40 seconds`}
+/>
+
+**What the output means:** 3 hosts responded out of 256 addresses. Those three are your targets. (On a local network the "latency" values are near-zero because the replies come from ARP, not ICMP.)
+
+Now port-scan each live host:
+
+<CodeBlock
+  lang="bash"
+  title="Step 2 — port scan the live hosts"
+  code={`nmap -p- 10.10.10.10 10.10.10.11 10.10.10.42`}
+/>
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `nmap -sn 10.10.10.0/24` | Standard host discovery | List of live hosts | Port scan each live host |
+| `nmap -sn -PS80,443,445 TARGET` | Discovery with TCP probes | Live hosts that ICMP misses | Compare with ICMP results |
+| `nmap -sn -PR 10.10.10.0/24` | Force ARP discovery (local) | Live hosts + MAC addresses | Cross-check with [Netdiscover](/guides/info-gathering/netdiscover) |
+| `nmap -Pn 10.10.10.42` | Skip host discovery, scan all ports | Ports even on "hidden" hosts | Enumerate every open port |
+| `nmap -sn --open 10.10.10.0/24` | Discovery without omitting hosts | Complete list (includes non-open hosts) | Review which hosts have no open ports |
+
+## Common mistakes
+
+- **Only scanning the top 1000 ports** during follow-up, missing services on higher ports.
+- **Believing `Host seems down` is authoritative** without retrying with `-Pn`.
+- **Assuming ICMP filtering means a host is dead.**
+- **Scanning the whole range with `-sn` and never doing a full TCP scan of the survivors.**
+- **Forgetting that ARP works only on your local segment** — `-PR` is useless against remote networks.
+
+## Related guides
+
+- [Nmap Fundamentals](/guides/info-gathering/nmap-fundamentals) — how to scan the hosts you just found.
+- [Network Discovery & ARP](/guides/info-gathering/network-discovery-arp) — ARP mechanics and the local network picture.
+- [Netdiscover](/guides/info-gathering/netdiscover) — a dedicated ARP discovery tool.
+- [Enumeration Methodology](/guides/info-gathering/enumeration-methodology) — where host discovery fits in the full flow.

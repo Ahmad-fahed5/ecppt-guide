@@ -1,0 +1,250 @@
+---
+title: Enumeration Methodology
+description: How to think during an assessment — the enumeration decision tree, service-specific branches, and four practical workflows.
+section: info-gathering
+phase: 1
+order: 16
+difficulty: intermediate
+draft: false
+tags: ['methodology', 'decision-tree', 'workflow', 'enumeration']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## How to think during enumeration
+
+Enumeration is not a list of tools run in a fixed order. It is a **conversation with the target**: you ask a question, the response suggests the next question, and you keep asking until the answers stop being useful. The skill is knowing which question to ask next.
+
+This guide gives you the decision framework, the service-specific branches, and four concrete workflows that cover the common starting points.
+
+## The enumeration decision tree
+
+The core loop, from nothing to attack surface:
+
+<CodeBlock
+  lang="text"
+  title="The enumeration decision tree"
+  code={`START
+   ↓
+What hosts are alive?
+   ↓
+What ports are open?
+   ↓
+What services are running?
+   ↓
+What versions?
+   ↓
+What technologies?
+   ↓
+What additional enumeration is relevant?
+   ↓
+What potential attack surface exists?
+   ↓
+What should I test next?`}
+/>
+
+Each question has a standard tool and a standard decision:
+
+| Question | Tool to answer it | Decision point |
+|---|---|---|
+| What hosts are alive? | [Host discovery](/guides/info-gathering/host-discovery) (`nmap -sn`, [netdiscover](/guides/info-gathering/netdiscover)) | Which hosts deserve port scans |
+| What ports are open? | [Nmap](/guides/info-gathering/nmap-fundamentals) `-p-` | Which ports need version detection |
+| What services are running? | `-sV`, banners | Which services need protocol enumeration |
+| What versions? | `-sV` intensity, manual banners | Version-based research and branches |
+| What technologies? | Headers, page source, `http-title` | Which tech-specific checks apply |
+| What additional enumeration? | NSE + manual per-service | Follow the branches below |
+| What attack surface exists? | Everything above, consolidated | Prioritize what to test next |
+
+## Service-specific branches
+
+When you see a port, you already know the branch to walk down:
+
+<CodeBlock
+  lang="text"
+  title="Port → branch map"
+  code={`80/443      → Web enumeration
+             (dirs, files, vhosts, tech, robots.txt)
+445          → SMB enumeration
+             (shares, users, null sessions, versions)
+22           → SSH enumeration
+             (auth methods, version, weak credentials in scope)
+53           → DNS enumeration
+             (records, zone transfer, names → hosts)
+389/636      → LDAP enumeration
+             (anonymous bind, base DN, exposed users)
+3389         → RDP enumeration
+             (version, NLA state, weak credentials)
+5985/5986    → WinRM enumeration
+             (valid users, weak credentials)
+161/udp      → SNMP enumeration
+             (community strings, full OID walk)`}
+/>
+
+### Web branch (80/443)
+
+1. Confirm server + tech: `curl -I`, page source, `http-title`.
+2. Directory/file discovery: [gobuster](/guides/info-gathering/gobuster) or [feroxbuster](/guides/info-gathering/feroxbuster).
+3. Vhost discovery: [ffuf](/guides/info-gathering/ffuf) on the Host header.
+4. Known-issue sweep: [nikto](/guides/info-gathering/nikto).
+5. Interesting files: `robots.txt`, backups, `.git/`, config files.
+6. **Decision:** what does the app do, and what should be tested next (→ [Web Service Enumeration](/guides/info-gathering/web-service-enumeration), later the [Web Security](/guides/web) phase).
+
+### SMB branch (139/445)
+
+1. Nmap SMB scripts (`smb-os-discovery`, `smb-enum-shares`).
+2. `smbclient -L //TARGET/ -N` → connect to readable shares.
+3. `enum4linux-ng -A TARGET` for users, groups, OS, policy.
+4. **Decision:** domain host? (→ [Active Directory](/guides/active-directory)); readable shares? (→ explore); writable shares? (→ check what service consumes them).
+
+### SSH branch (22)
+
+1. Version + auth methods: `-sV`, `nmap --script ssh2-enum-algos`.
+2. Check for weak/default credentials **only if in scope** (brute-forcing is a deliberate, authorized action).
+3. Look for leaked keys in other findings (shares, backups, web).
+4. **Decision:** is there a password or key that fits this host?
+
+### DNS branch (53)
+
+1. `dig @TARGET domain ANY`, look for subdomains and MX/TXT records.
+2. Attempt zone transfer: `dig @TARGET domain AXFR`.
+3. Brute subdomains: `gobuster dns` or `ffuf`.
+4. **Decision:** which resolved names map to in-scope hosts to enumerate?
+
+### LDAP branch (389/636)
+
+1. `nmap --script ldap-search` or `ldapsearch -x -H ldap://TARGET`.
+2. Try anonymous bind; discover base DN.
+3. **Decision:** can we list users/groups? (→ [Active Directory](/guides/active-directory)).
+
+### RDP / WinRM branches (3389 / 5985, 5986)
+
+1. Version and NLA state: `nmap --script rdp-ntlm-info`, `-sV`.
+2. Note whether credentials would unlock these services.
+3. **Decision:** do we have (or can we get) valid credentials? These branches depend on them.
+
+### SNMP branch (161/udp)
+
+1. Try community strings: `public`, `private`, vendor defaults.
+2. `snmpwalk -v2c -c public TARGET` — full OID tree.
+3. **Decision:** what system info, users, routes, or config does it expose?
+
+## Practical workflow 1 — Starting from an IP address
+
+<CodeBlock
+  lang="text"
+  title="Input: 10.10.10.42 only"
+  code={`Input: 10.10.10.42
+   ↓
+Host discovery   →  alive (confirm with -Pn if silent)
+   ↓
+Full TCP scan    →  -p- --open → 22, 80, 445
+   ↓
+Version detection → -sV → OpenSSH 8.2p1, Apache 2.4.41, Samba 4.13.17
+   ↓
+Decision         →  three branches to walk
+   ↓
+Web branch       →  gobuster → /admin, /backup.zip
+   ↓
+SMB branch       →  smbclient → readable "backup" share
+   ↓
+Next action      →  download backup.zip, inspect for credentials`}
+/>
+
+## Practical workflow 2 — Starting from a domain
+
+<CodeBlock
+  lang="text"
+  title="Input: corp.local only"
+  code={`Input: corp.local
+   ↓
+DNS enumeration   →  dig @10.10.10.53 corp.local ANY
+   ↓
+Records           →  A: 10.10.10.42, 10.10.10.43 · MX · TXT
+   ↓
+Subdomain brute   →  gobuster dns → admin.corp.local, dev.corp.local
+   ↓
+Decision         →  which hosts are in scope?
+   ↓
+Host enumeration →  each resolved host → full port + service scan
+   ↓
+Vhost checks     →  Host header fuzzing per IP
+   ↓
+Next action      →  enumerate each discovered application`}
+/>
+
+## Practical workflow 3 — Starting from a machine with a few known ports
+
+<CodeBlock
+  lang="text"
+  title="Input: 22, 80 already open"
+  code={`Input: 22/tcp, 80/tcp known
+   ↓
+Do not trust       →  verify with -p- --open (there may be more)
+   ↓
+Full scan          →  finds 445 (SMB) you did not know about
+   ↓
+Versions           →  -sV on all open ports
+   ↓
+Branches           →  SSH branch · Web branch · SMB branch
+   ↓
+Priority           →  enumerate the newest discovery first (445)
+   ↓
+Next action        →  SMB share hunt while web fuzzing runs in parallel`}
+/>
+
+## Practical workflow 4 — Starting from a compromised internal host
+
+<CodeBlock
+  lang="text"
+  title="Input: foothold on 10.10.10.42 (training scenario)"
+  code={`Input: shell on 10.10.10.42
+   ↓
+Local context      →  ip a, ip route, /etc/hosts, environment
+   ↓
+Segment mapping    →  ARP discovery from this host (netdiscover -i IFACE)
+   ↓
+New hosts          →  hosts reachable only from here
+   ↓
+Pivoting           →  route/port-forward through this host
+   ↓
+Repeat             →  full enumeration of the new segment
+   ↓
+Next action        →  credentials/files from this host feed the new targets`}
+/>
+
+(Full pivoting technique is covered in the [Pivoting](/guides/pivoting) section.)
+
+## Consolidating your findings
+
+After any workflow, write the facts down before testing anything:
+
+- **Hosts** — IP, OS hypothesis, role.
+- **Ports** — every open TCP and UDP port per host.
+- **Services** — exact service + version per port.
+- **Technologies** — web servers, languages, frameworks.
+- **Authentication surface** — login pages, SMB/SSH/winrm endpoints, default accounts found.
+- **Potential credentials** — passwords, hashes, keys spotted in files and shares.
+- **Attack surface summary** — the shortlist of what is worth testing.
+
+This summary is the input to the [Exploitation](/guides/exploitation) section and the backbone of your report.
+
+## Common mistakes
+
+- **Skipping questions** in the tree (e.g., versions) to chase the first interesting lead.
+- **Fuzzing everything with one tool** instead of branching per service.
+- **Ignoring UDP** (SNMP and friends go undiscovered).
+- **Not verifying scanner output** before deciding the next move.
+- **Failing to consolidate notes** — rediscovering facts later wastes time.
+- **Stopping at "what is here?"** without asking "what should I test next?".
+
+## Related guides
+
+- [Reconnaissance Fundamentals](/guides/info-gathering/recon-fundamentals) — the pipeline this tree belongs to.
+- [Nmap Scanning Methodology](/guides/info-gathering/nmap-scanning-methodology) — the scanning side of the tree.
+- [Service & Version Enumeration](/guides/info-gathering/service-version-enumeration) — the port-to-branch map in detail.
+- [Enumeration Checklist](/guides/info-gathering/enumeration-checklist) — the interactive version of this methodology.
+- [SMB / NetBIOS Enumeration](/guides/info-gathering/smb-netbios-enumeration) — the 445 branch.
+- [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) — the 80/443 branch.

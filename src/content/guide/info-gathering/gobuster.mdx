@@ -1,0 +1,195 @@
+---
+title: Gobuster
+description: Directory, file, DNS, and virtual-host enumeration with gobuster — wordlists, extensions, filtering, and what to do with every hit.
+section: info-gathering
+phase: 1
+order: 12
+difficulty: intermediate
+draft: false
+tags: ['gobuster', 'directory-enumeration', 'vhost', 'dns']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## Purpose
+
+Gobuster brute-forces names against a web server, a DNS zone, or a host header. Instead of waiting for a directory listing or reading the site map, it asks the server about thousands of candidate paths and reports the ones that respond. It is one of the standard tools for [web enumeration](/guides/info-gathering/web-service-enumeration).
+
+It has three main modes: **directory/file** (`dir`), **DNS** (`dns`), and **virtual host** (`vhost`).
+
+## Directory and file enumeration
+
+The core mode. Give it a base URL, a wordlist, and (for files) extensions:
+
+<CodeBlock
+  lang="bash"
+  title="Directory enumeration"
+  code={`gobuster dir -u http://10.10.10.42 -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="Example output"
+  code={`===============================================================
+Gobuster v3.6
+===============================================================
+[+] Url:                     http://10.10.10.42
+[+] Wordlist:                directory-list-2.3-small.txt
+[+] Status codes:            200,204,301,302,307,401,403
+[+] Threads:                 10
+===============================================================
+/admin                (Status: 301) [Size: 310]
+/backup.zip           (Status: 200) [Size: 4096]
+/index.php            (Status: 200) [Size: 12345]
+/login.php            (Status: 200) [Size: 2345]
+/private              (Status: 403) [Size: 310]
+===============================================================`}
+/>
+
+**What each column means:**
+
+- **Path** — the discovered candidate.
+- **Status** — the HTTP response code (see below).
+- **Size** — response body size; the single most useful line for triage.
+
+**What to investigate next:**
+
+- `/admin` (301 → redirect) — where does it redirect? Follow it.
+- `/backup.zip` (200) — **download and inspect**. Backup files are a top finding.
+- `/login.php` (200) — the authentication surface; add to your notes.
+- `/private` (403) — forbidden *for the current client*; try `-H "X-Forwarded-For: 127.0.0.1"`-style tricks later, or note it as a lead.
+
+## File enumeration with extensions
+
+Most applications only serve files with specific extensions. Add `-x` to probe them:
+
+<CodeBlock
+  lang="bash"
+  title="Adding extensions"
+  code={`gobuster dir -u http://10.10.10.42 -w /usr/share/wordlists/dirbuster/common.txt -x php,txt,html,bak -t 50`}
+/>
+
+Now gobuster also tries `admin.php`, `admin.txt`, `admin.html`, `admin.bak`, and so on. Pick extensions that match the stack you identified (`.php` for PHP, `.aspx`/`.asp` for IIS, `.jsp` for Java).
+
+## Understanding status codes
+
+Gobuster reports whatever statuses you ask for (default includes redirects, auth challenges, and errors — everything that is "a real path"):
+
+| Status | Meaning | Action |
+|---|---|---|
+| 200 | Found, served | Investigate the content |
+| 204 | No content | Check if it is a real endpoint (AJAX-style) |
+| 301/302 | Redirect | Follow the redirect target |
+| 401 | Unauthorized | Authentication surface — note it |
+| 403 | Forbidden | Exists but blocked for you — a lead |
+| 404 | Not found | Usually noise — filter it out |
+| 500 | Server error | Server-side processing hit — investigate |
+
+A **403** is often more interesting than a 200: the file exists, they just do not want you to see it.
+
+## Filtering results
+
+Real sites return hundreds of near-identical responses (soft-404s — every unknown path returns 200 with a generic page). Filter by status code and size to cut the noise:
+
+<CodeBlock
+  lang="bash"
+  title="Filtering noise"
+  code={`# Ignore 404s entirely
+gobuster dir -u http://10.10.10.42 -w wordlist.txt --exclude-length 0
+
+# Ignore the soft-404 body size (e.g. 1234 bytes returned for everything)
+gobuster dir -u http://10.10.10.42 -w wordlist.txt -s 200,204,301,302,403 --exclude-length 1234`}
+/>
+
+`--exclude-length` drops results whose response size matches. If every "found" path is the same size, the site is soft-404ing you — find that size and filter it.
+
+## Wordlists
+
+The wordlist decides what you will find. Common lab choices:
+
+| Wordlist | Type | Use |
+|---|---|---|
+| `/usr/share/wordlists/dirb/common.txt` | Small, common names | Quick first pass |
+| `/usr/share/wordlists/dirbuster/directory-list-2.3-small.txt` | Medium, directory-ish | Standard enumeration |
+| `/usr/share/seclists/Discovery/Web-Content/raft-small-directories.txt` | Thorough | Deeper pass |
+| `/usr/share/seclists/Discovery/DNS/subdomains-top1million-*.txt` | Subdomains | DNS/vhost mode |
+
+Larger wordlists find more but take longer. Start small, then go deeper on interesting hosts.
+
+## DNS enumeration mode
+
+Gobuster can brute-force hostnames against a DNS server:
+
+<CodeBlock
+  lang="bash"
+  title="DNS subdomain brute-forcing"
+  code={`gobuster dns -d corp.local -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -r 10.10.10.53`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="Example output"
+  code={`Found: admin.corp.local
+Found: mail.corp.local
+Found: dev.corp.local`}
+/>
+
+Each found name is a candidate host. Add the ones that resolve to your target's IP to `/etc/hosts` and enumerate their web apps separately.
+
+## Virtual host enumeration mode
+
+To find applications served on the same IP via different Host headers:
+
+<CodeBlock
+  lang="bash"
+  title="Vhost brute-forcing"
+  code={`gobuster vhost -u http://10.10.10.42 -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt --append-domain -d corp.local`}
+/>
+
+- `--append-domain -d corp.local` makes each word `FUZZ.corp.local`.
+- Vhost brute-forcing relies on **response differences** (size/status) between the default vhost and real ones. If every candidate returns identical responses, the server is not distinguishing vhosts that way — try ffuf's more flexible filtering.
+
+## Threads, HTTPS, and performance
+
+| Option | Purpose |
+|---|---|
+| `-t 50` | Threads — higher = faster, noisier. Lab-friendly range 20–100. |
+| `-k` | Skip TLS certificate verification (self-signed lab certs) |
+| `-o out.txt` | Save results to a file |
+| `--no-error` | Suppress "error on the request" noise |
+| `--timeout` | HTTP timeout seconds |
+| `-c` | Send a cookie (e.g., session cookie for an authenticated brute) |
+| `-H "Header: value"` | Custom headers (e.g., a required Host or X-Forwarded-For) |
+
+For HTTPS targets use `https://` in the URL and add `-k` if the certificate is self-signed — most lab hosts are.
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `gobuster dir -u URL -w LIST` | Directory enumeration | Found paths | Fetch and inspect each hit |
+| `gobuster dir -u URL -w LIST -x php,bak` | Files with extensions | Backup/php endpoints | Download files, test params |
+| `gobuster dir -u URL -w LIST -s 200,403 --exclude-length SIZE` | Filtered enumeration | Real hits, no soft-404s | Manual review |
+| `gobuster dns -d DOMAIN -w LIST -r DNS` | Subdomain brute-forcing | Found hostnames | Resolve + enumerate |
+| `gobuster vhost -u URL -w LIST --append-domain -d DOMAIN` | Vhost discovery | Hidden applications | Add to hosts file and enumerate |
+| `gobuster dir -u https://URL -k -t 50 -o out.txt` | HTTPS, insecure, parallel, saved | Full run with output file | Review the saved hits |
+
+## Common mistakes
+
+- **Using one tiny wordlist and calling it done.** A small wordlist is a first pass, not a conclusion.
+- **Not adding extensions** and missing the `.php`/`.bak` endpoints.
+- **Trusting raw status codes** without fetching pages (soft-404s and redirects lie).
+- **Ignoring 403s** — forbidden paths are leads.
+- **Forgetting `-k` on HTTPS labs** and burning time on certificate errors.
+- **Not filtering by response size** and drowning in noise.
+- **Running vhost/DNS modes without understanding response differences.**
+
+## Related guides
+
+- [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) — where gobuster fits in the web discovery flow.
+- [Feroxbuster](/guides/info-gathering/feroxbuster) — recursive discovery, a different approach to the same problem.
+- [ffuf](/guides/info-gathering/ffuf) — the fuzzing tool for when you need finer filters.
+- Later: [Web Application Security](/guides/web) — what to do with everything you find.

@@ -1,0 +1,147 @@
+---
+title: Netdiscover
+description: A dedicated ARP discovery tool for mapping live hosts, MAC addresses, and vendors on the local network segment.
+section: info-gathering
+phase: 1
+order: 9
+difficulty: beginner
+draft: false
+tags: ['netdiscover', 'arp', 'host-discovery']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## Purpose
+
+Netdiscover is an active/passive ARP reconnaissance tool designed for one job: finding every host on a local network segment and reporting its IP and MAC address. Unlike Nmap, which mixes many techniques, netdiscover is focused and simple — and its vendor detection makes the output immediately readable.
+
+**Where it works:** only on your local broadcast domain. Because it uses ARP, it is useless against networks behind a router. Use it on the segment your attacking interface actually connects to (for example `tun0` on a VPN lab).
+
+## Basic usage
+
+<CodeBlock
+  lang="bash"
+  title="ARP sweep of a /24"
+  code={`netdiscover -r 10.10.10.0/24`}
+/>
+
+This sends ARP requests for every address in the range and prints a table as it discovers hosts.
+
+<CodeBlock
+  lang="text"
+  title="Example output"
+  code={`Currently scanning: Finished!   |   Screen View: Unique Hosts
+ 2 Captured ARP Req/Rep packets, from 4 hosts.   Total size: 336
+ _____________________________________________________________________________
+   IP            At MAC Address     Count     Len  MAC Vendor / Hostname
+ -----------------------------------------------------------------------------
+ 10.10.10.1     00:50:56:aa:bb:01      2     60  VMware, Inc.
+ 10.10.10.10    00:0c:29:11:22:33      1     60  VMware, Inc.
+ 10.10.10.42    00:0c:29:44:55:66      1     60  VMware, Inc.
+ 10.10.10.99    08:00:27:77:88:99      1     60  PCS Systemtechnik GmbH
+ -----------------------------------------------------------------------------`}
+/>
+
+**What the output means:**
+
+- **IP** — the discovered host.
+- **At MAC Address** — its physical address; note the vendor OUI.
+- **Count** — how many ARP packets were observed for that host (higher usually means more active).
+- **MAC Vendor** — the NIC manufacturer, inferred from the OUI.
+
+In a VMware/Hyper-V/VirtualBox lab, the vendor column instantly separates the virtual targets from real infrastructure.
+
+## Interface selection
+
+By default netdiscover picks the active interface. When you have multiple interfaces (typical on a VPN lab with `eth0` and `tun0`), select explicitly:
+
+<CodeBlock
+  lang="bash"
+  title="Specify the interface"
+  code={`netdiscover -i tun0 -r 10.10.10.0/24`}
+/>
+
+If you scan through the wrong interface, you will ARP the wrong segment and find nothing. Check your interfaces with `ip a` first (see [Network Discovery & ARP](/guides/info-gathering/network-discovery-arp)).
+
+## CIDR targeting
+
+The `-r` flag takes a CIDR range:
+
+<CodeBlock
+  lang="bash"
+  title="Different ranges"
+  code={`# Whole /24
+netdiscover -i tun0 -r 10.10.10.0/24
+
+# A /16 (larger, slower)
+netdiscover -i tun0 -r 10.10.0.0/16
+
+# A tiny range
+netdiscover -i tun0 -r 10.10.10.0/28`}
+/>
+
+Larger ranges take longer and are noisier. For lab work a `/24` (or smaller) is usually right.
+
+## Passive mode
+
+Netdiscover can also run passively — it listens for ARP traffic already on the network without sending its own requests:
+
+<CodeBlock
+  lang="bash"
+  title="Passive ARP listening"
+  code={`netdiscover -p`}
+/>
+
+Passive mode is quieter (you emit no packets) but only sees hosts that are already talking. It is a nice complement to active scanning: run the sweep for the full picture, then keep a passive listener running while you work.
+
+Other useful options:
+
+| Flag | Effect |
+|---|---|
+| `-c count` | Stop after N scans of the range |
+| `-l` | (with `-r`) scan continuously / follow the range as an alias |
+| `-s` | Sleep N seconds between scans (default 1) |
+| `-t` | Timeout per packet in ms |
+| `-f` | Fast mode (fewer packets, quicker finish) |
+
+## Limitations
+
+- **Local segment only.** No router-crossing; useless for remote subnets.
+- **No OS/version information.** You get IP + MAC + vendor, nothing about services. It is a discovery tool, not an enumeration tool.
+- **Vendor label ≠ operating system.** The OUI tells you the NIC manufacturer. Two VMware hosts could be Linux and Windows.
+- **Switches can filter.** A properly configured switch limits which broadcasts you see (though ARP requests are normally flooded to all ports).
+- **Not a substitute for port scanning.** It answers "who is here?", not "what are they running?" — follow up with [Nmap](/guides/info-gathering/nmap-fundamentals).
+
+## When to use it
+
+- First pass over a fresh segment you have never touched.
+- Cross-checking an Nmap host discovery result (different tool, same question).
+- Quick orientation in a lab where you suspect hidden hosts.
+- Passive presence while you work elsewhere.
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `netdiscover -r 10.10.10.0/24` | Active ARP sweep | Live hosts + MACs + vendors | Port scan the survivors |
+| `netdiscover -i tun0 -r RANGE` | Sweep on a specific interface | Same, from the right segment | Confirm you are on the correct network |
+| `netdiscover -p` | Passive listening | Hosts already talking | Active sweep for the full list |
+| `netdiscover -c 10 -r RANGE` | Bounded sweep | Finite list, stops after 10 rounds | Move on to scanning |
+| `nmap -sn -PR RANGE` | Cross-check with Nmap | Live host list (Nmap view) | Compare with netdiscover |
+
+## Common mistakes
+
+- **Running netdiscover against a remote network** — ARP cannot cross a router.
+- **Forgetting `-i` on multi-interface setups** and scanning the wrong segment.
+- **Expecting service or OS details** from a tool that only does IP/MAC.
+- **Reading the vendor column as the operating system.**
+- **Skipping the follow-up port scan** — discovery is only the first step.
+
+## Related guides
+
+- [Network Discovery & ARP](/guides/info-gathering/network-discovery-arp) — the protocol netdiscover relies on.
+- [Host Discovery](/guides/info-gathering/host-discovery) — netdiscover vs. Nmap `-sn` and when to use each.
+- [Nmap Fundamentals](/guides/info-gathering/nmap-fundamentals) — the next step after you have the host list.

@@ -1,0 +1,158 @@
+---
+title: Reconnaissance Fundamentals
+description: What reconnaissance is, passive vs active methods, why enumeration matters, and how recon feeds the rest of an assessment.
+section: info-gathering
+phase: 1
+order: 1
+difficulty: beginner
+draft: false
+tags: ['reconnaissance', 'methodology', 'scope', 'attack-surface']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+<Alert variant="info" title="Authorized context">
+  Everything in this section is written for <strong>authorized penetration testing, CTF events, and your own labs</strong>. Never run discovery or scanning tools against systems you are not explicitly allowed to test.
+</Alert>
+
+## What reconnaissance is
+
+Reconnaissance is the process of collecting information about a target before you attempt to interact with it in an offensive way. In a professional assessment it is the phase where you answer the most basic questions:
+
+- **Who** are we testing?
+- **What** systems, hosts, and services make up the target?
+- **Where** are they located, on what networks and domains?
+- **What** software and technologies are they running?
+
+The quality of everything that follows depends on how well you answer these questions. Most failed assessments are not failed because of exploitation — they are failed because the tester never found the right service, never enumerated the right share, or never knew a technology was in scope. Reconnaissance is where you prevent those failures.
+
+## Passive vs active reconnaissance
+
+Reconnaissance splits into two broad categories:
+
+| | Passive | Active |
+|---|---|---|
+| Touches the target | No direct interaction | Direct interaction (packets, requests) |
+| Example | Reading DNS records, searching public sources | Scanning a host with Nmap |
+| Detectability | Usually low | Can be logged by the target |
+| Speed | Slower to gather, often limited | Fast and direct |
+| Typical sources | Search engines, certificate transparency, whois, DNS | Port scans, banners, HTTP requests |
+
+<SourceTag source="practical" /> Neither is "better" — they are used at different points. You start passively to understand the shape of the target and define what is in scope, then switch to active methods to confirm and enrich what the passive phase suggested. In a lab or exam environment you will often go active immediately because you already have a network range to test; in a real engagement the passive phase helps you avoid wasting time scanning the wrong things.
+
+## Why enumeration matters
+
+Enumeration is active reconnaissance done thoroughly: pulling the actual services, versions, shares, users, and endpoints off a target. It matters because:
+
+- **Exploitation depends on information.** You can only attack what you know exists.
+- **Versions drive vulnerability research.** "SSH" is a fact; "OpenSSH 9.x on Linux" is an attack plan.
+- **Servers rarely have one interesting thing.** A web server also runs FTP, a mail server also exposes a management port, a domain controller also shares SMB. Enumeration finds the non-obvious attack surface.
+- **It forces completeness.** Enumerating every open port stops you from tunnel-visioning on one obvious service while a more valuable one sits unused.
+
+## Attack surface
+
+The attack surface is the sum of everything a potential attacker can touch: open ports, web applications, services, protocols, management interfaces, and exposed credentials. During recon you are building a map of that surface.
+
+Think of it as a running inventory you maintain through the whole engagement:
+
+- Open TCP and UDP ports
+- Services and versions
+- Web applications and their technologies
+- Shares and exposed files
+- Users and authentication endpoints
+- Network paths to other hosts
+
+Every item you add is a potential entry point — but also a potential dead end. Enumeration tells you which are worth pursuing.
+
+## Target identification and scope awareness
+
+Before you scan anything, you must know exactly what you are allowed to touch. Scope is not a suggestion; exceeding it is a real incident in a real engagement and a disqualifying failure in a professional exam.
+
+Practical scope questions to answer first:
+
+- Which IP addresses or CIDR ranges are in scope?
+- Which domains are in scope?
+- Are adjacent networks in scope (e.g., when pivoting)?
+- Are any hosts explicitly out of scope (e.g., the lab infrastructure, the VPN gateway)?
+- What actions are permitted (port scanning only, full testing, exploitation)?
+
+<Alert variant="warning" title="Write the scope down">
+  Record the in-scope ranges before you start. During an engagement the lines blur, especially after you gain a foothold and start seeing internal networks. A written scope keeps your decisions honest.
+</Alert>
+
+## Information hierarchy
+
+Not all collected information is equally trustworthy. Rank it mentally as you go:
+
+| Reliability | Example | Why |
+|---|---|---|
+| Low | Nmap guess from a closed port | Inference, often wrong |
+| Low | Web technology guesses from one header | Easy to misread or spoof |
+| Medium | Service version banner | Better, but banners can lie or be out of date |
+| High | Confirmed interaction with the service | Login prompts, valid responses, share listings |
+| High | Verified credentials and user output | Direct confirmation |
+
+Treat scanner labels as hypotheses, not conclusions. `445/tcp open microsoft-ds` is a strong hint; a successful `smbclient` listing is proof.
+
+## The reconnaissance pipeline
+
+A useful way to think about the whole process is as a chain where each stage feeds the next:
+
+<CodeBlock
+  lang="text"
+  title="Recon → Exploitation pipeline"
+  code={`Reconnaissance
+      ↓
+Discovery
+      ↓
+Enumeration
+      ↓
+Vulnerability identification
+      ↓
+Exploitation`}
+/>
+
+- **Reconnaissance** — decide who/what is in scope, collect leads passively and actively.
+- **Discovery** — find which hosts are alive on a network and which ports are open on those hosts.
+- **Enumeration** — extract details from the services found: versions, shares, users, endpoints, technologies.
+- **Vulnerability identification** — match the enumerated facts against known issues, misconfigurations, and weak defaults.
+- **Exploitation** — use the identified weakness to gain access, in an authorized context.
+
+Each stage narrows the field. You go from "a whole network range" to "a handful of specific attack vectors." The pipeline is not a straight line — you will loop back constantly. Finding a new port sends you back to enumeration. Gaining a foothold usually reveals a new network to discover.
+
+## How reconnaissance leads to exploitation
+
+Concrete example of how far enumeration can take you:
+
+<CodeBlock
+  lang="text"
+  title="Enumeration chain example"
+  code={`Host discovery   → 10.10.10.42 is alive
+Port scan         → 22, 80, 445 open
+Version detection → Apache 2.4.49, Samba 4.x
+Web enumeration   → /admin login page on 80
+SMB enumeration   → share "backup" readable without credentials
+NSE / directory   → /backup.zip downloadable from the share
+Result            → credentials.txt contains a valid SSH user/password
+Exploitation      → SSH login → foothold`}
+/>
+
+No single step was dramatic. The exploit only existed because the enumeration was complete and disciplined. That is the entire point of this section: **the more thoroughly you enumerate, the less guesswork exploitation requires.**
+
+## Common mistakes
+
+- **Skipping recon and scanning a single guessed port.** You will miss the interesting services.
+- **Confusing scope.** Scanning an out-of-scope host, even accidentally, is a real problem.
+- **Trusting scanner output as fact.** Versions and banners are hypotheses until confirmed.
+- **Doing passive and active recon in the wrong order.** Know the shape of the target before flooding it with packets.
+- **Not keeping notes.** Every fact you collect is wasted if you cannot find it again during exploitation.
+
+## Related guides
+
+- Continue with [Host Discovery](/guides/info-gathering/host-discovery) to find live hosts on a lab network.
+- Learn the tool that does most of the work: [Nmap Fundamentals](/guides/info-gathering/nmap-fundamentals).
+- For the full decision process, see [Enumeration Methodology](/guides/info-gathering/enumeration-methodology).

@@ -1,0 +1,178 @@
+---
+title: ffuf
+description: Web fuzzing with ffuf — directories, parameters, and virtual hosts, plus response filtering and matching.
+section: info-gathering
+phase: 1
+order: 14
+difficulty: intermediate
+draft: false
+tags: ['ffuf', 'fuzzing', 'vhost', 'web']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## Purpose
+
+Ffuf (Fast Fuzzer) is the swiss-army fuzzer for web enumeration. You give it a URL template with a `FUZZ` placeholder and a wordlist; it replaces `FUZZ` with every word, sends the requests, and shows you the responses that match your filters. Because it is word-based and filter-driven, it can fuzz directories, filenames, parameters, and virtual hosts with the same tool.
+
+Its superpower is **precise filtering** — deciding which responses are noise and which are real — which makes it the tool of choice when soft-404s and wildcard vhosts are in play.
+
+## The anatomy of an ffuf command
+
+<CodeBlock
+  lang="bash"
+  title="Basic directory fuzzing"
+  code={`ffuf -u http://10.10.10.42/FUZZ -w /usr/share/wordlists/dirb/common.txt`}
+/>
+
+- `-u` — the URL template. `FUZZ` is the placeholder (default keyword).
+- `-w` — the wordlist (you can supply multiple with `:name` aliases, see vhosts below).
+
+By default ffuf shows every response. In real life you almost always filter, otherwise you drown in 404s and soft-404s.
+
+## Filtering by status and size — and why it matters
+
+Two responses are identical in URL but completely different in meaning. A "valid" hit and a soft-404 often differ **only in response size**. Without filtering, ffuf reports them both; with filtering, the noise vanishes.
+
+<CodeBlock
+  lang="bash"
+  title="Filter by status code"
+  code={`# Show only useful statuses
+ffuf -u http://10.10.10.42/FUZZ -w wordlist.txt -mc 200,204,301,302,307,401,403
+
+# Hide a noisy status
+ffuf -u http://10.10.10.42/FUZZ -w wordlist.txt -fc 404`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="Filter by response size"
+  code={`# The site returns 1234 bytes for every unknown path → filter it
+ffuf -u http://10.10.10.42/FUZZ -w wordlist.txt -fs 1234
+
+# Or filter a word count instead
+ffuf -u http://10.10.10.42/FUZZ -w wordlist.txt -fw 130`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="Filtered output"
+  code={`:: Method           : GET
+:: URL              : http://10.10.10.42/FUZZ
+:: Wordlist         : FUZZ: wordlist.txt
+:: Filter           : Response size: 1234
+________________________________________________
+
+admin                   [Status: 301, Size: 310, Words: 7, Lines: 2]
+backup.zip              [Status: 200, Size: 4096, Words: 22, Lines: 5]
+login.php               [Status: 200, Size: 2345, Words: 60, Lines: 15]
+:: Progress: [4709/4709] :: Job [1/1] :: 0 req/sec ...`}
+/>
+
+The filter removes the noise, and the remaining rows are the real leads. **This is why response filtering matters**: without it, a 4700-word wordlist against a soft-404 site is unreadable; with it, you get the handful of paths that matter.
+
+## Directory and file fuzzing
+
+Fuzz directories and filenames with the same `FUZZ` pattern, and test extensions with multiple wordlists:
+
+<CodeBlock
+  lang="bash"
+  title="Files with extensions via two wordlists"
+  code={`ffuf -u http://10.10.10.42/FUZZ -w wordlist.txt -e .php,.bak,.txt -mc 200,301,403 -fs 1234`}
+/>
+
+`-e` appends extensions to every word (`backup.php`, `backup.bak`, ...). Combine with `-mc` to keep only meaningful statuses and `-fs` to drop soft-404s.
+
+## Virtual host fuzzing
+
+To find applications hidden behind different Host headers, fuzz the Host header itself:
+
+<CodeBlock
+  lang="bash"
+  title="Vhost fuzzing with a named wordlist"
+  code={`ffuf -u http://10.10.10.42/ -H "Host: FUZZ.corp.local" -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -fs 1234`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="Vhost fuzzing with alias + word count filter"
+  code={`ffuf -u http://10.10.10.42/ -H "Host: FUZZ.corp.local" -w subdomains.txt:W -fw 320`}
+/>
+
+The `:W` alias names the wordlist so you can reference it in filters. If every candidate produces the same response (wildcard vhost), filter by that size (`-fs`) or word count (`-fw`); the real vhosts will differ.
+
+## Parameter fuzzing
+
+Fuzz the values a parameter accepts — this is where you start exploring application behaviour:
+
+<CodeBlock
+  lang="bash"
+  title="Parameter value fuzzing"
+  code={`ffuf -u http://10.10.10.42/page.php?id=FUZZ -w ids.txt -mc 200,302 -fs 1234`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="Parameter name fuzzing (hidden parameters)"
+  code={`ffuf -u http://10.10.10.42/page.php -w /usr/share/seclists/Discovery/Web-Content/burp-parameter-names.txt -X POST -d "FUZZ=test" -H "Content-Type: application/x-www-form-urlencoded" -mc 200,500`}
+/>
+
+A hidden parameter that changes the response (different size, status 500 vs 200) is a strong lead for application testing in the later web phase.
+
+## Matching vs filtering
+
+- `-mc` / `-mw` / `-ms` / `-ml` — **match** only responses with these values (show these).
+- `-fc` / `-fw` / `-fs` / `-fl` — **filter out** responses with these values (hide these).
+
+The letters: `c` = status code, `s` = size in bytes, `w` = word count, `l` = line count. Use `-fs 0` to hide empty bodies, `-fw <n>` to hide the wildcard response, etc.
+
+## Wordlists
+
+The same wordlists as [gobuster](/guides/info-gathering/gobuster#wordlists) apply, plus specialist ones:
+
+| Wordlist | Use |
+|---|---|
+| `burp-parameter-names.txt` | Hidden parameter discovery |
+| `subdomains-top1million-5000.txt` | Vhost/hostname fuzzing |
+| `raft-*` lists | Thorough directory/file content |
+
+## Safe lab examples
+
+Always test in an authorized environment. A complete first pass on a lab host:
+
+<CodeBlock
+  lang="bash"
+  title="Starter directory fuzz"
+  code={`ffuf -u http://10.10.10.42/FUZZ -w /usr/share/wordlists/dirb/common.txt -mc 200,204,301,302,307,401,403 -fs 1234 -o ffuf-dirs.json`}
+/>
+
+`-o ffuf-dirs.json` saves results for later review and reporting.
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `ffuf -u http://TARGET/FUZZ -w LIST -mc 200,301,403 -fs SIZE` | Directory fuzzing | Real paths only | Fetch and inspect hits |
+| `ffuf -u http://TARGET/FUZZ -w LIST -e .php,.bak` | File fuzzing | Endpoints with extensions | Download/analyse files |
+| `ffuf -u http://TARGET/ -H "Host: FUZZ.dom" -w LIST -fs SIZE` | Vhost fuzzing | Hidden apps | Add to hosts, enumerate |
+| `ffuf -u http://TARGET/page.php?id=FUZZ -w LIST -mc 200` | Parameter fuzzing | Accepted values | App behaviour testing |
+| `ffuf -u http://TARGET/ -w LIST -fw 130` | Wildcard filter | Anything that differs | Manual verification |
+
+## Common mistakes
+
+- **Running without any filter** and reading a wall of soft-404s.
+- **Using `-fs 0` when the wildcard is a nonzero size**, hiding nothing.
+- **Fuzzing vhosts without knowing the base response size** — establish the baseline first with one request.
+- **Forgetting `-mc`/`-fc` for statuses** and treating 404s as findings.
+- **Fuzzing parameters with huge wordlists against authenticated pages** without a session cookie.
+- **Not saving output (`-o`)** for a repeatable record.
+
+## Related guides
+
+- [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) — where fuzzing fits in discovery.
+- [Gobuster](/guides/info-gathering/gobuster) — the simpler brute-forcer, useful for quick passes.
+- [Feroxbuster](/guides/info-gathering/feroxbuster) — recursive discovery with automatic depth.
+- Later: [Web Application Security](/guides/web) — exploiting what fuzzing reveals.

@@ -1,0 +1,146 @@
+---
+title: Feroxbuster
+description: Recursive web content discovery — how feroxbuster crawls found directories, and how it differs conceptually from gobuster.
+section: info-gathering
+phase: 1
+order: 13
+difficulty: intermediate
+draft: false
+tags: ['feroxbuster', 'directory-enumeration', 'web']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## Purpose
+
+Feroxbuster is a web content discovery tool built around **recursive brute-forcing**. When it finds a directory, it automatically scans *inside* that directory, then inside the directories it finds there, crawling the tree for you. Where gobuster hands you a list of paths and expects you to drill down, feroxbuster drills down by itself.
+
+That one design decision — recursion — is the conceptual difference between the two tools, and it is the reason to pick feroxbuster when you want depth without babysitting.
+
+<Alert variant="info" title="Neither tool is universally better">
+  Gobuster is often simpler to reason about and has DNS/vhost modes built in. Feroxbuster's recursion is ideal for deep discovery but can produce more noise and more requests. Choose per situation: gobuster for a quick structured pass, feroxbuster when you want the tree mapped automatically. <strong>Do not treat "tool X is better" as a rule</strong> — use the one that fits the job.
+</Alert>
+
+## Basic usage
+
+<CodeBlock
+  lang="bash"
+  title="First run"
+  code={`feroxbuster -u http://10.10.10.42 -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt`}
+/>
+
+By default feroxbuster **recurses**: hits on directories trigger further scans within them.
+
+<CodeBlock
+  lang="text"
+  title="Example output (excerpt)"
+  code={`200      GET    5l     12w     512c  http://10.10.10.42/admin
+200      GET   45l    130w    2310c  http://10.10.10.42/admin/config.php
+403      GET    1l      1w      33c  http://10.10.10.42/private
+301      GET    2l      3w     310c  http://10.10.10.42/uploads => http://10.10.10.42/uploads/`}
+/>
+
+The columns are: status, method, lines, words, size (bytes), and URL. The `=>` on 301/302 rows shows the redirect target.
+
+## Recursive discovery in action
+
+Recursion is the headline feature. Found `/admin`? Feroxbuster immediately scans `/admin/`, then `/admin/config/`, and so on. This is exactly what you want on a site where the good stuff is buried several levels deep.
+
+<CodeBlock
+  lang="bash"
+  title="Controlling recursion depth"
+  code={`# Deep recursion (default behavior)
+feroxbuster -u http://10.10.10.42 -w wordlist.txt -d 10
+
+# No recursion (flat, like a basic gobuster run)
+feroxbuster -u http://10.10.10.42 -w wordlist.txt -d 1`}
+/>
+
+`-d` sets the maximum recursion depth. Depth 1 = flat.
+
+## File enumeration and extensions
+
+Like gobuster, feroxbuster probes extensions on top of the wordlist:
+
+<CodeBlock
+  lang="bash"
+  title="Extensions"
+  code={`feroxbuster -u http://10.10.10.42 -w wordlist.txt -x php,txt,bak,html`}
+/>
+
+`-x` also appends the extension to *recursed* directories, so `/admin` gets checked as `/admin.php` too. That is a useful difference: gobuster needs the wordlist to contain both the directory and the file names.
+
+## Filtering
+
+Recursive crawling produces a lot of output, so filtering matters:
+
+<CodeBlock
+  lang="bash"
+  title="Filtering by status, size, and word count"
+  code={`# Hide 404s (and similar)
+feroxbuster -u http://10.10.10.42 -w wordlist.txt -C 404
+
+# Hide the soft-404 body size
+feroxbuster -u http://10.10.10.42 -w wordlist.txt -S 1234
+
+# Hide a word count (another way to spot soft-404s)
+feroxbuster -u http://10.10.10.42 -w wordlist.txt -W 130
+
+# Multiple filters at once
+feroxbuster -u http://10.10.10.42 -w wordlist.txt -C 404 -S 1234`}
+/>
+
+| Filter | Meaning |
+|---|---|
+| `-C 404` | Exclude status codes (comma-separated) |
+| `-S 1234` | Exclude response size in bytes |
+| `-W 130` | Exclude response word count |
+| `-L 5` | Exclude line count |
+| `--filter-regex` | Exclude by regex on the URL |
+
+## Wordlists
+
+Same wordlists as gobuster ([see the reference](/guides/info-gathering/gobuster#wordlists)). For recursion, medium/large wordlists are typical because the tool is already committed to exploring depth.
+
+## Options worth knowing
+
+| Option | Purpose |
+|---|---|
+| `-k` | Skip TLS certificate verification |
+| `-t 50` | Threads (default 50) |
+| `-o out.txt` | Save results (also `--json` / `--save-state`) |
+| `-H "Header: value"` | Custom headers |
+| `-c COOKIE` | Cookie value (authenticated scans) |
+| `--extract-links` | Also parse links from page bodies as candidates |
+| `--dont-extract-links` | Disable the above (default on) |
+| `--scan-dir-list` | Extra directory wordlists used when recursing |
+| `--time-limit` | Stop after a duration (e.g. `30m`) |
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `feroxbuster -u URL -w LIST` | Recursive discovery | Full directory tree | Inspect the deepest/newest hits |
+| `feroxbuster -u URL -w LIST -x php,bak` | Extensions + recursion | Endpoints + files | Download and test files |
+| `feroxbuster -u URL -w LIST -C 404 -S SIZE` | Filtered run | Only real hits | Manual verification |
+| `feroxbuster -u URL -w LIST -d 1` | Flat run | One-level listing | Follow up manually |
+| `feroxbuster -u https://URL -k -t 100 -o out.txt` | HTTPS, fast, saved | Complete saved run | Review hits systematically |
+
+## Common mistakes
+
+- **Not understanding recursion** and being surprised when the tool scans deep into directories.
+- **Letting an unfiltered recursive run drown you in soft-404 noise.**
+- **Assuming feroxbuster is "better" than gobuster everywhere** — choose per situation.
+- **Forgetting `-k` on self-signed lab HTTPS.**
+- **Not saving output** — a long recursive run you cannot review later is wasted work.
+- **Trusting hits without fetching them** — every result is still a candidate, not a fact.
+
+## Related guides
+
+- [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) — the discovery flow feroxbuster automates.
+- [Gobuster](/guides/info-gathering/gobuster) — the non-recursive alternative with DNS/vhost modes.
+- [ffuf](/guides/info-gathering/ffuf) — the fuzzing tool for fine-grained filtering.
+- Later: [Web Application Security](/guides/web) — testing what you discovered.

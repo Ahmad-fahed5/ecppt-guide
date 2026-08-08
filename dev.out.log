@@ -93,3 +93,131 @@
 [2m16:32:51[22m [34m[200][39m / [2m13ms[22m
 [2m16:32:53[22m [34m[200][39m /guides/methodology [2m13ms[22m
 [2m16:33:03[22m [34m[200][39m /progress [2m7ms[22m
+[2m16:52:17[22m [34m[200][39m /progress [2m13ms[22m
+[2m16:52:19[22m [34m[200][39m /guides/foundations [2m10ms[22m
+[2m16:52:20[22m [34m[200][39m /guides/info-gathering [2m8ms[22m
+[2m16:52:21[22m [34m[200][39m /guides/web [2m12ms[22m
+[2m16:52:21[22m [34m[200][39m /guides/exploitation [2m8ms[22m
+[2m16:52:22[22m [34m[200][39m /guides/linux-privesc [2m8ms[22m
+[2m16:52:22[22m [34m[200][39m /guides/windows-privesc [2m8ms[22m
+[2m16:52:23[22m [34m[200][39m /guides/active-directory [2m8ms[22m
+[2m16:52:24[22m [34m[200][39m /guides/lateral-movement [2m7ms[22m
+[2m16:52:24[22m [34m[200][39m /guides/pivoting [2m8ms[22m
+[2m16:52:25[22m [34m[200][39m /guides/powershell [2m8ms[22m
+[2m16:52:26[22m [34m[200][39m / [2m12ms[22m
+[2m16:52:26[22m [34m[200][39m /roadmap [2m15ms[22m
+[2m16:52:28[22m [34m[200][39m / [2m12ms[22m
+[2m16:52:29[22m [34m[200][39m /guides [2m11ms[22m
+[2m16:52:30[22m [34m[200][39m / [2m12ms[22m
+[2m16:52:31[22m [34m[200][39m /methodology [2m7ms[22m
+[2m16:52:32[22m [34m[200][39m / [2m15ms[22m
+[2m17:11:49[22m [34m[200][39m /guides/info-gathering [2m9ms[22m
+[2m17:11:54[22m [34m[200][39m /guides/web [2m9ms[22m
+[2m17:11:55[22m [34m[200][39m /guides/exploitation [2m9ms[22m
+[2m17:11:56[22m [34m[200][39m /guides/linux-privesc [2m8ms[22m
+[2m17:11:57[22m [34m[200][39m /guides/windows-privesc [2m9ms[22m
+[2m17:11:58[22m [34m[200][39m /guides/active-directory [2m8ms[22m
+[2m17:11:58[22m [34m[200][39m /guides/lateral-movement [2m7ms[22m
+[2m17:11:59[22m [34m[200][39m /guides/pivoting [2m7ms[22m
+[2m17:12:00[22m [34m[200][39m /guides/foundations [2m7ms[22m
+[2m17:14:50[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/recon-fundamentals.mdx[39m
+[2m17:14:51[22m [34m[200][39m /guides/foundations [2m100ms[22m
+[2m17:15:07[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/host-discovery.mdx[39m
+[2m17:15:08[22m [34m[200][39m /guides/foundations [2m79ms[22m
+[2m17:16:13[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/nmap-fundamentals.mdx[39m
+[2m17:16:14[22m [34m[200][39m /guides/foundations [2m91ms[22m
+[2m17:16:41[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/nmap-scanning-methodology.mdx[39m
+[2m17:16:42[22m [34m[200][39m /guides/foundations [2m58ms[22m
+[2m17:17:09[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/service-version-enumeration.mdx[39m
+[2m17:17:10[22m [34m[200][39m /guides/foundations [2m70ms[22m
+[2m17:17:21[22m [34m[200][39m /guides/foundations [2m8ms[22m
+[2m17:17:26[22m [34m[200][39m /guides/info-gathering [2m8ms[22m
+[2m17:17:38[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/nse-scripts.mdx[39m
+[2m17:17:39[22m [34m[200][39m /guides/info-gathering [2m97ms[22m
+[2m17:18:03[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/udp-scanning.mdx[39m
+[2m17:18:04[22m [34m[200][39m /guides/info-gathering [2m65ms[22m
+[2m17:18:35[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/network-discovery-arp.mdx[39m
+[2m17:18:36[22m [34m[200][39m /guides/info-gathering [2m71ms[22m
+[2m17:18:54[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/netdiscover.mdx[39m
+[2m17:18:56[22m [34m[200][39m /guides/info-gathering [2m83ms[22m
+[2m17:19:20[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/smb-netbios-enumeration.mdx[39m
+[2m17:19:21[22m [34m[200][39m /guides/info-gathering [2m98ms[22m
+[2m17:19:53[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/web-service-enumeration.mdx[39m
+[2m17:19:54[22m [34m[200][39m /guides/info-gathering [2m94ms[22m
+[2m17:20:16[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/gobuster.mdx[39m
+[2m17:20:17[22m [34m[200][39m /guides/info-gathering [2m127ms[22m
+[2m17:20:36[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/feroxbuster.mdx[39m
+[2m17:20:38[22m [34m[200][39m /guides/info-gathering [2m79ms[22m
+[2m17:20:49[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/feroxbuster.mdx[39m
+[2m17:20:50[22m [34m[200][39m /guides/info-gathering [2m73ms[22m
+[2m17:21:13[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/ffuf.mdx[39m
+[2m17:21:15[22m [34m[200][39m /guides/info-gathering [2m80ms[22m
+[2m17:21:50[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/ffuf.mdx[39m
+[2m17:21:51[22m [34m[200][39m /guides/info-gathering [2m74ms[22m
+[2m17:22:03[22m [34m[200][39m /guides/foundations [2m5ms[22m
+[2m17:22:05[22m [34m[200][39m / [2m31ms[22m
+[2m17:22:05[22m [34m[200][39m /roadmap [2m13ms[22m
+[2m17:22:08[22m [34m[200][39m /guides/foundations [2m8ms[22m
+[2m17:22:09[22m [34m[200][39m /guides/info-gathering [2m10ms[22m
+[2m17:22:10[22m [34m[200][39m /guides/web [2m8ms[22m
+[2m17:22:10[22m [34m[200][39m /guides/exploitation [2m7ms[22m
+[2m17:22:11[22m [34m[200][39m /guides/linux-privesc [2m8ms[22m
+[2m17:22:13[22m [34m[200][39m /roadmap [2m13ms[22m
+[2m17:22:15[22m [34m[200][39m /roadmap [2m15ms[22m
+[2m17:22:16[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/nikto.mdx[39m
+[2m17:22:17[22m [34m[200][39m /roadmap [2m31ms[22m
+[2m17:22:20[22m [34m[200][39m /guides/foundations [2m97ms[22m
+[2m17:22:21[22m [34m[200][39m /guides/info-gathering [2m9ms[22m
+[2m17:22:59[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/enumeration-methodology.mdx[39m
+[2m17:23:00[22m [34m[200][39m /guides/info-gathering [2m81ms[22m
+[2m17:23:16[22m [34m[glob-loader][39m Reloaded data from [32minfo-gathering/enumeration-checklist.mdx[39m
+[2m17:23:18[22m [34m[200][39m /guides/info-gathering [2m83ms[22m
+[2m17:23:47[22m [34m[200][39m /guides/info-gathering [2m53ms[22m
+[2m17:24:33[22m [34m[200][39m /guides/info-gathering/recon-fundamentals/ [2m68ms[22m
+[2m17:24:33[22m [34m[200][39m /guides/info-gathering/host-discovery/ [2m47ms[22m
+[2m17:24:33[22m [34m[200][39m /guides/info-gathering/nmap-fundamentals/ [2m64ms[22m
+[2m17:24:33[22m [34m[200][39m /guides/info-gathering/nmap-scanning-methodology/ [2m35ms[22m
+[2m17:24:33[22m [34m[200][39m /guides/info-gathering/service-version-enumeration/ [2m44ms[22m
+[2m17:24:33[22m [34m[200][39m /guides/info-gathering/nse-scripts/ [2m38ms[22m
+[2m17:24:33[22m [34m[200][39m /guides/info-gathering/udp-scanning/ [2m28ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/network-discovery-arp/ [2m28ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/netdiscover/ [2m26ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/smb-netbios-enumeration/ [2m29ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/web-service-enumeration/ [2m34ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/gobuster/ [2m33ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/feroxbuster/ [2m26ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/ffuf/ [2m34ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/nikto/ [2m25ms[22m
+[2m17:24:34[22m [34m[200][39m /guides/info-gathering/enumeration-methodology/ [2m41ms[22m
+[2m17:24:35[22m [34m[200][39m /guides/info-gathering/enumeration-checklist/ [2m36ms[22m
+[2m17:24:56[22m [34m[200][39m /guides/info-gathering/enumeration-checklist/ [2m16ms[22m
+[2m17:24:56[22m [34m[200][39m /guides/info-gathering/nmap-fundamentals/ [2m12ms[22m
+[2m17:24:56[22m [34m[200][39m /guides/info-gathering/smb-netbios-enumeration/ [2m10ms[22m
+[2m17:24:56[22m [34m[200][39m /guides/info-gathering/ [2m4ms[22m
+[2m17:25:30[22m [34m[200][39m /guides/info-gathering/enumeration-checklist/ [2m22ms[22m
+[2m17:25:54[22m [34m[200][39m /guides/info-gathering/enumeration-checklist/ [2m16ms[22m
+[2m17:26:42[22m [34m[200][39m /guides/info-gathering [2m12ms[22m
+[2m17:26:43[22m [34m[200][39m /guides/info-gathering [2m10ms[22m
+[2m17:26:47[22m [34m[200][39m /guides/info-gathering [2m13ms[22m
+[2m17:26:49[22m [34m[200][39m /guides/info-gathering [2m13ms[22m
+[2m17:26:49[22m [34m[200][39m /guides/info-gathering [2m10ms[22m
+[2m17:26:51[22m [34m[200][39m /methodology [2m9ms[22m
+[2m17:26:52[22m [34m[200][39m /toolbox [2m9ms[22m
+[2m17:26:52[22m [34m[200][39m /exam-prep [2m6ms[22m
+[2m17:26:53[22m [34m[200][39m / [2m42ms[22m
+[2m17:26:54[22m [34m[200][39m /roadmap [2m14ms[22m
+[2m17:26:55[22m [34m[200][39m /guides [2m40ms[22m
+[2m17:26:56[22m [34m[200][39m /guides/foundations [2m9ms[22m
+[2m17:26:56[22m [34m[200][39m /guides/info-gathering [2m9ms[22m
+[2m17:26:57[22m [34m[200][39m /guides/web [2m10ms[22m
+[2m17:26:58[22m [34m[200][39m /guides/exploitation [2m10ms[22m
+[2m17:27:15[22m [34m[200][39m / [2m22ms[22m
+[2m17:27:17[22m [34m[200][39m /guides/foundations [2m7ms[22m
+[2m17:27:18[22m [34m[200][39m /guides/info-gathering [2m10ms[22m
+[2m17:27:19[22m [34m[200][39m / [2m10ms[22m
+[2m17:27:20[22m [34m[200][39m /roadmap [2m13ms[22m
+[2m17:27:20[22m [34m[200][39m /guides [2m10ms[22m
+[2m17:27:21[22m [34m[200][39m /methodology [2m6ms[22m
+[2m17:27:21[22m [34m[200][39m /toolbox [2m6ms[22m
+[2m17:27:21[22m [34m[200][39m /exam-prep [2m4ms[22m
+[2m17:27:22[22m [34m[200][39m /guides/foundations [2m9ms[22m

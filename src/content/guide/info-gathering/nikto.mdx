@@ -1,0 +1,140 @@
+---
+title: Nikto
+description: Using Nikto as a web-server scanning aid, understanding its checks, and separating its findings from false positives.
+section: info-gathering
+phase: 1
+order: 15
+difficulty: intermediate
+draft: false
+tags: ['nikto', 'web', 'scanner']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## What Nikto does
+
+Nikto is a web server scanner that checks a target for **known issues**: outdated software, dangerous files, insecure configurations, and misconfigurations that a checklist of known problems would flag. It is fast, loud, and shallow — it compares responses against a large database of checks and reports matches.
+
+<Alert variant="warning" title="Nikto is an enumeration/scanning aid, not a finding generator">
+  Nikto tells you what a <em>scan</em> noticed. It does not prove a vulnerability, and it produces <strong>false positives</strong> — findings that look real but are not. Every result must be verified by hand before it counts. Treat Nikto output as <em>leads to investigate</em>, never as a finished report.
+</Alert>
+
+## Basic usage
+
+<CodeBlock
+  lang="bash"
+  title="Basic scan"
+  code={`nikto -h http://10.10.10.42`}
+/>
+
+`-h` is the host. Output is a plain-text list of numbered findings plus a summary line.
+
+<CodeBlock
+  lang="text"
+  title="Example output (excerpt)"
+  code={`- Nikto v2.5.0
+-----------------------------------------------------------
++ Target IP:          10.10.10.42
++ Target Hostname:    10.10.10.42
++ Target Port:        80
+-----------------------------------------------------------
++ Server: Apache/2.4.41 (Ubuntu)
++ /: The anti-clickjacking X-Frame-Options header is not present.
++ /: Server banner has been changed/obscured.
++ /: Apache/2.4.41 appears to be outdated (current is at least 2.4.54).
++ /admin/: Directory indexing found.
++ /backup.zip: # 1 request: 0 other replies.
++ 2 host(s) tested`}
+/>
+
+## What Nikto checks
+
+| Check type | Example | How to read it |
+|---|---|---|
+| Server banner | `Apache/2.4.41 (Ubuntu)` | Confirm the version with `curl -I` |
+| Outdated software | "appears to be outdated" | A lead — verify the *actual* installed version |
+| Missing headers | `X-Frame-Options` absent | Configuration observation, not a vulnerability by itself |
+| Dangerous files | `backup.zip`, `.env` found | **Verify by fetching the file** |
+| Directory indexing | `/admin/` listing files | Fetch it — is the listing actually visible? |
+| Misconfigurations | default pages, admin paths | Check the path yourself |
+
+## Server checks and common dangerous files
+
+Nikto's database focuses on:
+
+- **Default and admin paths** (`/admin`, `/manager`, `/phpmyadmin`, ...).
+- **Backup and config files** (`.bak`, `.old`, `.zip`, `~`, `config.php`).
+- **Source control exposure** (`/.git/`, `/.svn/`).
+- **Outdated software versions** flagged from banners.
+- **Header and cookie misconfigurations**.
+
+The dangerous-file checks are the most actionable: when Nikto says `/backup.zip` exists, go confirm it. If the file is real and readable, you have a concrete finding regardless of the rest of the scan.
+
+## Limitations
+
+- **Shallow.** It checks known names; it does not understand applications or find new issues.
+- **Noisy.** A full Nikto run fires hundreds of requests and is easily noticed.
+- **False positives.** Banner guesses, soft-404s, and generic "best practice" items inflate the output.
+- **Version checks are banner-based.** A patched server with an old banner is misreported as vulnerable.
+- **No context.** It cannot tell you if a path is *actually* dangerous in the application's design.
+
+## False positives and how to handle them
+
+Every "finding" from Nikto deserves the same verification loop:
+
+1. **Reproduce it yourself** — request the URL, read the status and body.
+2. **Ask if the observation matters.** `X-Frame-Options` missing is a hardening note, not necessarily exploitable.
+3. **Check the version claim** — is the software really the reported version?
+4. **Confirm the file/path is actually served** and not a soft-404.
+5. **Record only verified findings** in your notes and eventual report.
+
+A 200 on `/backup.zip` that returns a real archive is a finding. A 200 on `/backup.zip` that returns the default 404 page at size 1234 is noise.
+
+## When to use Nikto
+
+- As a **sweep** after directory enumeration, to catch known names you might not have tried.
+- As a **cross-check** — a second source confirming paths a fuzzer found.
+- When you want banner and header observations collected in one place.
+
+It pairs naturally with the fuzzers ([gobuster](/guides/info-gathering/gobuster), [feroxbuster](/guides/info-gathering/feroxbuster), [ffuf](/guides/info-gathering/ffuf)): let them find paths exhaustively, let Nikto add the known-issue checks, then verify everything manually.
+
+## Useful options
+
+| Option | Purpose |
+|---|---|
+| `-h URL` | Target (also `https://...`) |
+| `-p 8080` | Specific port |
+| `-ssl` | Force SSL (older syntax) |
+| `-o report.html` | Save report (extension sets format: html, txt, csv, xml, json) |
+| `-C all` | Run all CGI checks (noisy) |
+| `-Tuning 1,2` | Limit to specific check categories |
+| `-timeout 10` | Per-request timeout |
+| `-maxtime 60s` | Stop after a duration |
+| `-useragent` | Set a custom User-Agent |
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `nikto -h http://TARGET` | Standard scan | Numbered finding list | Verify each finding manually |
+| `nikto -h https://TARGET -o report.html` | HTTPS scan with report | Saved findings | Review report + verify |
+| `nikto -h http://TARGET -Tuning 1` | Limited tuning (files only) | File-related checks | Fetch the files found |
+| `curl -I http://TARGET` | Confirm server banner | Real version | Compare with Nikto's claim |
+
+## Common mistakes
+
+- **Copying Nikto findings into a report unverified.** That is how false positives become "findings".
+- **Trusting the "outdated" banner check** without confirming the actual version.
+- **Running Nikto as the *only* web enumeration.** It misses anything not in its database.
+- **Scanning without a scope check** — Nikto is noisy, and noisy is not "safe".
+- **Ignoring the dangerous-file results** because the rest was noise.
+
+## Related guides
+
+- [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) — where Nikto fits in the discovery flow.
+- [Gobuster](/guides/info-gathering/gobuster) — exhaustive path discovery to pair with Nikto.
+- [Feroxbuster](/guides/info-gathering/feroxbuster) / [ffuf](/guides/info-gathering/ffuf) — deeper discovery.
+- Later: [Web Application Security](/guides/web) — real testing of the surfaces Nikto flags.

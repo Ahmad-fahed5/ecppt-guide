@@ -1,0 +1,180 @@
+---
+title: NSE Scripts
+description: What the Nmap Scripting Engine is, how to choose safe enumeration scripts, and how to interpret their output.
+section: info-gathering
+phase: 1
+order: 6
+difficulty: intermediate
+draft: false
+tags: ['nmap', 'nse', 'scripts', 'enumeration']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## What NSE is
+
+The Nmap Scripting Engine (NSE) runs small scripts against scan results. Each script is written in Lua and asks a specific question of a service — what OS is SMB reporting, which DNS records exist, is TLS configured safely. NSE turns Nmap from a port scanner into an enumeration platform.
+
+The key concept: **NSE scripts enumerate and report. They do not (by default) exploit.** A script that lists SMB shares is enumeration. Distinguishing that from exploitation is the difference between mapping a network and breaking into it.
+
+## Script categories
+
+Scripts are organized into categories you can select on the command line:
+
+| Category | What it does | Typical use |
+|---|---|---|
+| `safe` | Unlikely to affect the target | The default set — banners, config checks, info grabs |
+| `default` | Run by `-sC` | Broad, safe enumeration across services |
+| `discovery` | Host/service discovery helpers | Find more services and hosts |
+| `version` | Version detection helpers | Improve `-sV` results |
+| `auth` | Auth-related checks (not exploitation) | Test default credentials, list methods |
+| `intrusive` | More aggressive, may disrupt | Only when you have good reason |
+| `vuln` | Check for known vulnerabilities | Reports *conditions*, not exploits |
+| `exploit` | Contains actual exploits | **Do not run without explicit authorization and a controlled target** |
+| `dos` | Denial-of-service related | **Avoid in shared or production environments** |
+| `brute` | Brute-forcing credentials | Slow, noisy — use deliberately in scope |
+
+**Practical rule:** in lab work you will almost always run `safe`/`default` scripts, occasionally `vuln` to confirm a version-based suspicion, and essentially never `exploit` or `dos` without a very good reason and a controlled lab.
+
+## The default scripts (`-sC`)
+
+`-sC` runs the `default` category — a broad set of safe scripts appropriate for the services found:
+
+<CodeBlock
+  lang="bash"
+  title="Default script scanning"
+  code={`nmap -sC -sV -p- -oA target 10.10.10.42`}
+/>
+
+What the default set includes for common services:
+
+- **HTTP**: `http-headers`, `http-title`, `http-methods`, `http-server-header`
+- **SMB**: `smb-enum-shares`, `smb-os-discovery`, `smb-protocols`, `smb2-security-mode`
+- **SSH**: `ssh2-enum-algos`, `ssh-hostkey`
+- **DNS**: `dns-nsid`, sometimes `dns-brute` in other categories
+- **TLS**: `ssl-cert`, `ssl-enum-ciphers`
+
+<CodeBlock
+  lang="text"
+  title="Typical -sC output"
+  code={`| smb-enum-shares:
+|   account used: guest
+|   \\\\10.10.10.42\\IPC$       Read: NO    Write: NO
+|   \\\\10.10.10.42\\backup    Read: YES   Write: YES
+|   \\\\10.10.10.42\\public    Read: YES   Write: NO`}
+/>
+
+That one script result is worth more than the whole port scan: it tells you a `backup` share is readable *and writable*, and which account it ran under. That is a real lead.
+
+## Selecting individual scripts
+
+When you know the service, target the relevant scripts instead of running everything:
+
+<CodeBlock
+  lang="bash"
+  title="Targeted script run"
+  code={`nmap --script smb-enum-shares,smb-os-discovery,smb-protocols -p445 10.10.10.42`}
+/>
+
+Multiple scripts are comma-separated. You can also select by category and exclude by prefixing `-`:
+
+<CodeBlock
+  lang="bash"
+  title="Category selection with exclusions"
+  code={`nmap --script "default and not brute" -p- 10.10.10.42`}
+/>
+
+Common enumeration scripts worth knowing:
+
+| Script | Service | Question it answers |
+|---|---|---|
+| `smb-enum-shares` | 445 | Which shares exist and are readable/writable? |
+| `smb-os-discovery` | 445 | What OS/workgroup/domain does SMB report? |
+| `smb-protocols` | 445 | Which SMB dialects are supported? |
+| `http-title` | 80/443 | What is the page `<title>`? |
+| `http-headers` | 80/443 | What are the response headers? |
+| `http-enum` | 80/443 | What common paths/directories exist? |
+| `http-methods` | 80/443 | Which HTTP methods are allowed? |
+| `ssl-cert` | 443 | What is the TLS certificate (names, issuer)? |
+| `ssl-enum-ciphers` | 443 | Which ciphers are supported? |
+| `dns-nsid` | 53 | What does the DNS server identify as? |
+| `ssh2-enum-algos` | 22 | Which SSH algorithms are allowed? |
+| `ftp-anon` | 21 | Is anonymous FTP enabled? |
+| `smtp-enum-users` | 25 | Can we enumerate mail users? |
+| `mysql-info` | 3306 | What MySQL version/banner? |
+
+## Understanding script help
+
+Before running an unfamiliar script, check what it does and what arguments it takes:
+
+<CodeBlock
+  lang="bash"
+  title="Script help"
+  code={`nmap --script-help smb-enum-shares
+
+smb-enum-shares
+Categories: discovery intrusive
+  Attempts to list shares using the SMB protocol.
+  This is a special extension of the smb-brute.sharename script.
+  ...
+`}
+/>
+
+Note the **category line**. If the help says `intrusive`, `brute`, `vuln`, or `exploit`, think before running it — it may be noisy, slow, or invasive.
+
+## Enumeration vs exploitation
+
+This is the most important distinction in this guide:
+
+<Alert variant="warning" title="Reading NSE output responsibly">
+  - <code>smb-enum-shares</code> showing a readable share = <strong>enumeration</strong>. It tells you the share exists.
+  - <code>smb-vuln-ms17-010</code> reporting the target may be vulnerable = <strong>a lead</strong>, not a compromise. It says "this condition looks present."
+  - Actually <strong>using</strong> that condition to gain access = <strong>exploitation</strong>, which belongs to the [Exploitation section](/guides/exploitation) and requires explicit authorization for that target.
+</Alert>
+
+`vuln` scripts report conditions based on fingerprints. They produce false positives (patched systems with misleading banners, or environments where the check cannot run reliably). A positive result means "worth investigating manually", never "it is broken, stop there".
+
+## A safe enumeration workflow
+
+<CodeBlock
+  lang="bash"
+  title="Phased script approach"
+  code={`# 1) Default scripts on the interesting services
+nmap -sC -p22,80,443,445 -oA scans/script-default 10.10.10.42
+
+# 2) Targeted scripts for services that matter
+nmap --script smb-enum-shares,smb-os-discovery -p445 10.10.10.42
+
+# 3) Confirm anything interesting by hand (smbclient, curl, dig)`}
+/>
+
+Always follow up script output with manual confirmation. Scripts summarize; you are the one who has to trust the result.
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `nmap -sC -sV TARGET` | Default scripts + versions | Broad enumeration output | Target specific services |
+| `nmap --script <a,b> TARGET` | Run named scripts | Those scripts' output | Confirm findings manually |
+| `nmap --script-help <script>` | Explain a script | Description + category | Decide if it is safe to run |
+| `nmap --script "default and not brute" TARGET` | Category with exclusions | Filtered script set | Run what remains |
+| `nmap --script vuln TARGET` | Vulnerability condition checks | Possible vuln conditions | Manual verification |
+
+## Common mistakes
+
+- **Running `--script vuln` (or worse `exploit`) without reading the category** and without a controlled target.
+- **Treating every script output as fact.** Scripts misread banners and configs regularly.
+- **Never confirming script results manually.** A share listing from a script should be verified with `smbclient`.
+- **Running intrusive or brute scripts on shared infrastructure.**
+- **Believing `vuln` output is a finished finding.** It is the start of an investigation.
+- **Ignoring the output format** — script results live in the `|` pipe section of Nmap output, easy to skim past.
+
+## Related guides
+
+- [Nmap Fundamentals](/guides/info-gathering/nmap-fundamentals) — where `-sC` fits with the other options.
+- [Nmap Scanning Methodology](/guides/info-gathering/nmap-scanning-methodology) — Step 5 of the workflow.
+- [SMB / NetBIOS Enumeration](/guides/info-gathering/smb-netbios-enumeration) — how to follow up on SMB scripts.
+- [Service & Version Enumeration](/guides/info-gathering/service-version-enumeration) — using script output to build the host fact sheet.

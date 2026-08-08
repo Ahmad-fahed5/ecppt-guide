@@ -1,0 +1,183 @@
+---
+title: SMB / NetBIOS Enumeration
+description: Enumerating SMB and NetBIOS — shares, users, workgroups, null sessions, and version information — with smbclient, enum4linux-ng, and Nmap scripts.
+section: info-gathering
+phase: 1
+order: 10
+difficulty: intermediate
+draft: false
+tags: ['smb', 'netbios', 'enum4linux-ng', 'smbclient', 'windows']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## What SMB and NetBIOS are
+
+- **SMB (Server Message Block)** is the protocol Windows uses for file sharing, printing, and remote administration. On modern Windows it runs on TCP 445. Linux servers often expose it through **Samba**.
+- **NetBIOS over TCP/IP** is the older name/service layer. It runs on TCP 139 and UDP 137/138 and carries workgroup and machine-name information.
+
+When 139 or 445 is open, you are looking at a file-sharing / Windows-network host. That makes SMB one of the highest-value services to enumerate in an internal network: it frequently exposes shares, users, and version details that drive everything else.
+
+<SourceTag source="practical" /> In lab environments (and the eCPPTv3 course material), SMB enumeration is a core skill because it reliably produces the information you need for later phases — shares to investigate, usernames to test, and host information to map.
+
+## What we are looking for
+
+| Fact | Why it matters |
+|---|---|
+| Share names | Readable/writable shares are filesystem access leads |
+| Users | Every username is a candidate for [credential attacks](/guides/exploitation) and further enumeration |
+| Workgroup / domain | Tells you if the host belongs to a Windows domain (→ [Active Directory](/guides/active-directory)) |
+| OS / SMB version | Confirms Windows vs Linux (Samba), and which Windows version |
+| Null session / anonymous access | Whether we can query without credentials |
+
+<Alert variant="warning" title="Do not assume anonymous access">
+  Modern Windows disables null sessions and anonymous share access by default. If <code>enum4linux-ng</code> returns nothing and <code>smbclient -L</code> fails, that is a <strong>normal, modern configuration</strong> — not a mistake on your part. It tells you SMB is locked down, which is itself useful information. Move on to authenticated paths or other services.
+</Alert>
+
+## Step 1 — Nmap scripts for the lay of the land
+
+Start with Nmap's SMB scripts to get OS, dialect, and share information in one pass:
+
+<CodeBlock
+  lang="bash"
+  title="SMB script pass"
+  code={`nmap --script smb-os-discovery,smb-protocols,smb2-security-mode,smb-enum-shares -p139,445 10.10.10.42`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="What to look for"
+  code={`| smb-os-discovery:
+|   OS: Windows Server 2022 (build 20348)
+|   OS CPE: cpe:/o:microsoft:windows_server_2022:::
+|   Computer name: DC01
+|   NetBIOS computer name: DC01
+|   Workgroup: CORP
+|   System time: 2026-08-08T10:00:00
+|
+| smb-protocols:
+|   dialects:
+|     NT LM 0.12 (SMBv1) [dangerous]
+|     SMB 2.02
+|     SMB 3.00`}
+/>
+
+Read every line:
+
+- **Computer name / Workgroup** — `DC01` in workgroup `CORP` strongly suggests a domain controller (→ [Active Directory](/guides/active-directory)).
+- **SMBv1 dialect listed as `[dangerous]`** — a lead worth noting, not an automatic finding.
+- **Share enumeration** may reveal names even when listing content fails.
+
+## Step 2 — `smbclient` for shares
+
+List the available shares:
+
+<CodeBlock
+  lang="bash"
+  title="List shares (anonymous)"
+  code={`smbclient -L //10.10.10.42/ -N`}
+/>
+
+- `-L` lists the shares; `-N` means no password (null session).
+
+If that fails with an access-denied error, try with a valid set of credentials if you have any:
+
+<CodeBlock
+  lang="bash"
+  title="List shares (with credentials)"
+  code={`smbclient -L //10.10.10.42/ -U 'CORP\\user' --password='password'`}
+/>
+
+Once you know a share name, connect to it:
+
+<CodeBlock
+  lang="bash"
+  title="Connect to a share"
+  code={`smbclient //10.10.10.42/backup -N
+smb: \\> ls
+smb: \\> get interesting-file.zip
+smb: \\> exit`}
+/>
+
+Inside the share you can `ls`, `cd`, `get` (download), `put` (upload, if writable), and `recursive` list. **A readable share is a filesystem you can explore** — look for config files, backups, scripts, and anything that leaks credentials.
+
+## Step 3 — `enum4linux-ng` for the full sweep
+
+`enum4linux-ng` is a modern, maintained rewrite of the classic enum4linux. It wraps many SMB/RPC queries into one readable report (including JSON/YAML output).
+
+<CodeBlock
+  lang="bash"
+  title="Full enumeration"
+  code={`enum4linux-ng -A 10.10.10.42`}
+/>
+
+`-A` is shorthand for running the user, share, and group enumeration together. Typical interesting sections:
+
+- **`[+]` user listings** — `RID 1001: alice`, `RID 1002: bob` — usernames for later testing.
+- **`[+]` share listings** — readable share names, sometimes with notes.
+- **`[+]` OS information** — version strings, workgroup, DNS domain.
+- **`[+]` policies** — password policy hints (useful before any brute force).
+
+<CodeBlock
+  lang="bash"
+  title="Targeted user enumeration"
+  code={`enum4linux-ng -U 10.10.10.42`}
+/>
+
+Run individual flags when you only need one answer: `-U` users, `-S` shares, `-G` groups, `-O` OS info, `-P` password policy.
+
+## Step 4 — reading the results
+
+Each result type means something specific:
+
+| Result | Reveals | Investigate next |
+|---|---|---|
+| Share `backup` readable | Files on disk via SMB | Download and inspect contents |
+| Share `public` writable | Possible file upload | Check if it feeds any service (web root?) |
+| User list | Account names | Test weak/default passwords in scope; map to other services |
+| Workgroup/domain name | Windows domain membership | [Active Directory](/guides/active-directory) enumeration |
+| SMB version / OS | Windows vs Samba, Windows build | Version-based research; choose correct tools |
+| Null session works | Open RPC queries | Full enum4linux-ng sweep, deeper queries |
+
+## SMB and the bigger picture
+
+SMB findings rarely live alone:
+
+- A writable share on a web host may let you place a file the web server executes (later phase).
+- A user list feeds [credential attacks](/guides/exploitation).
+- Domain controller identification points you at [Active Directory](/guides/active-directory).
+- Share access on an internal host after a foothold is standard [lateral movement](/guides/lateral-movement) territory.
+
+Record what SMB tells you in your notes; it usually becomes the backbone of the network map.
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `nmap --script smb-enum-shares,smb-os-discovery -p445 TARGET` | Nmap SMB sweep | OS, workgroup, shares | Manual confirmation |
+| `smbclient -L //TARGET/ -N` | List shares (null session) | Share names or access-denied | Connect to readable shares |
+| `smbclient //TARGET/share -N` | Open a share | Interactive SMB prompt | `ls`, `get`, inspect files |
+| `enum4linux-ng -A TARGET` | Full SMB/RPC enumeration | Users, shares, OS, policy | Follow the leads |
+| `enum4linux-ng -U TARGET` | Users only | Username list | Test credentials in scope |
+| `smbmap -H TARGET -R` | Recursive share listing | File tree of readable shares | Hunt for configs/keys |
+
+## Common mistakes
+
+- **Assuming anonymous access is the norm.** Modern hosts refuse it; that refusal is a valid result.
+- **Stopping at share names** without connecting and listing contents.
+- **Forgetting to check writable shares** (`Read: YES Write: YES`) — those are the valuable ones.
+- **Ignoring the OS/workgroup lines** that tell you about the domain and host role.
+- **Recording usernames but not using them** later when credentials are needed.
+- **Treating SMBv1 presence as an automatic vulnerability.** It is a lead requiring validation.
+
+## Related guides
+
+- [NSE Scripts](/guides/info-gathering/nse-scripts) — the SMB scripts and how to interpret their output.
+- [Service & Version Enumeration](/guides/info-gathering/service-version-enumeration) — SMB in the port/service map.
+- [Active Directory](/guides/active-directory) — when SMB reveals a domain environment.
+- [Exploitation](/guides/exploitation) — what credential and share findings can lead to.
+- [Enumeration Methodology](/guides/info-gathering/enumeration-methodology) — where SMB sits in the decision tree.

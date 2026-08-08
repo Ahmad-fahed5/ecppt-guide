@@ -1,0 +1,179 @@
+---
+title: Web Service Enumeration
+description: Discovery and enumeration of web services — technology identification, directories, files, virtual hosts, and the tools that automate it.
+section: info-gathering
+phase: 1
+order: 11
+difficulty: intermediate
+draft: false
+tags: ['web', 'http', 'enumeration', 'gobuster', 'feroxbuster', 'ffuf', 'nikto']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+
+## Scope of this guide
+
+This guide covers the **discovery and enumeration** of web services. It deliberately stops at the point where you know what the application is, what it runs on, and what it exposes — the exploitation of web vulnerabilities (SQL injection, LFI/RFI, file uploads, and friends) belongs to a later section in the knowledge base.
+
+## Identifying HTTP / HTTPS services
+
+Most web servers announce themselves during scanning. When Nmap reports `80/tcp http` or `443/tcp https`, confirm it and grab the basics:
+
+<CodeBlock
+  lang="bash"
+  title="Read the response headers"
+  code={`curl -I http://10.10.10.42`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="Example headers"
+  code={`HTTP/1.1 200 OK
+Date: Sat, 08 Aug 2026 10:00:00 GMT
+Server: nginx/1.18.0 (Ubuntu)
+X-Powered-By: PHP/7.4.33
+Set-Cookie: PHPSESSID=...; path=/
+Content-Type: text/html; charset=UTF-8`}
+/>
+
+Each header is evidence:
+
+- **`Server: nginx/1.18.0 (Ubuntu)`** — web server software and OS family.
+- **`X-Powered-By: PHP/7.4.33`** — server-side language (a strong lead, but it can be faked or removed).
+- **`Set-Cookie: PHPSESSID`** — the language/framework fingerprint (PHP here; `JSESSIONID` = Java, `ASP.NET_SessionId` = ASP.NET).
+
+Also fetch the page itself and read the HTML — framework banners, meta tags, generator comments, and asset paths (`/wp-content/` = WordPress, `/vendor/` = PHP composer, etc.) all identify the stack.
+
+## Technology identification
+
+Beyond headers, three quick techniques:
+
+1. **Page source and asset names** — theme directories, framework asset paths, inline version numbers.
+2. **`wappalyzer`-style browser extensions** — a *convenience* that packages the same signals; do not trust it blindly.
+3. **Nmap scripts** — `http-headers`, `http-title`, `http-server-header`, and `http-enum` give a structured view in one pass.
+
+<CodeBlock
+  lang="bash"
+  title="Nmap web script pass"
+  code={`nmap --script http-headers,http-title,http-enum -p80,443 10.10.10.42`}
+/>
+
+The output names the page title (`http-title`), the headers (`http-headers`), and often flags common paths (`http-enum`). Treat all of it as leads.
+
+## Web server identification
+
+The `Server` header names the web server, and small differences matter:
+
+| Header / signal | Likely server | Notes |
+|---|---|---|
+| `Server: Apache/2.4.41 (Ubuntu)` | Apache on Linux | Common in labs |
+| `Server: nginx/1.18.0` | nginx | Often a reverse proxy in front of an app server |
+| `Server: Microsoft-IIS/10.0` | IIS on Windows | Points to Windows + ASP.NET stack |
+| Missing/`Server:` header hidden | Reverse proxy or hardening | App server may be behind it |
+| `x-powered-by: ASP.NET` | ASP.NET | Windows application stack |
+
+Knowing *what kind* of web server you face selects your tools and your expectations — but always confirm with behaviour, not just headers.
+
+## Directory and file discovery
+
+The core web-enumeration activity: find the paths the application did not advertise. This is where the content-fuzzing tools earn their keep:
+
+- [Gobuster](/guides/info-gathering/gobuster) — fast directory/file/DNS/vhost brute-forcing.
+- [Feroxbuster](/guides/info-gathering/feroxbuster) — recursive discovery with a focus on deep crawling.
+- [ffuf](/guides/info-gathering/ffuf) — the fuzzing workhorse for directories, parameters, and vhosts.
+
+A standard discovery sequence on a new web host:
+
+<CodeBlock
+  lang="bash"
+  title="Quick directory discovery"
+  code={`gobuster dir -u http://10.10.10.42 -w /usr/share/wordlists/dirbuster/directory-list-2.3-small.txt -x php,txt,html -t 50`}
+/>
+
+Why extensions matter: requesting `/backup.php` finds PHP endpoints; `/backup` alone may miss them. Most lab wordlists (e.g., `common.txt`, `directory-list-2.3-*.txt`) cover the realistic names.
+
+## Virtual hosts
+
+One server can host many applications distinguished by the **Host header**. A request for `http://10.10.10.42/` may return a default page while `http://admin.corp.local/` returns an admin panel. Virtual host discovery tries candidate hostnames:
+
+<CodeBlock
+  lang="bash"
+  title="Vhost discovery with ffuf"
+  code={`ffuf -u http://10.10.10.42 -H "Host: FUZZ.corp.local" -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -fs 1234`}
+/>
+
+(Explanation of the `-fs 1234` filter: the default vhost and all non-matches share one response size, so filtering on that size isolates real vhosts.)
+
+Add discovered names to `/etc/hosts` (or use `--resolve`/`-H`) and re-enumerate each application as its own target.
+
+## Interesting files and endpoints
+
+Beyond directories, look for the files that commonly hold secrets or configuration:
+
+| What to check | Example paths | Why it matters |
+|---|---|---|
+| `robots.txt` | `/robots.txt` | Author-approved hints about hidden paths |
+| Backup files | `.bak`, `.old`, `~`, `.zip`, `.tar.gz`, `.sql` | Often contain source or databases |
+| Config files | `.env`, `config.php`, `web.config`, `.git/config` | Credentials, keys, internal paths |
+| Source repos | `/.git/`, `/.svn/`, `/.hg/` | Full source if `.git` is exposed |
+| Login portals | `/login`, `/admin`, `/wp-admin`, `/login.php` | Authentication surface |
+| Docs & README | `/README`, `/docs/`, `/api/` | Structure, endpoints, credentials in examples |
+| Error pages | nonexistent path | Stack traces, versions, framework leaks |
+
+Check `robots.txt` first — it is a map drawn by the site owners:
+
+<CodeBlock
+  lang="bash"
+  title="Robots.txt"
+  code={`curl -s http://10.10.10.42/robots.txt
+User-agent: *
+Disallow: /admin
+Disallow: /backup/
+Disallow: /private`}
+/>
+
+Each `Disallow` line is an invitation to check whether the path is actually protected.
+
+## Manual checks vs automated tools
+
+Automated tools generate candidates; **you verify**. For every interesting path a tool reports:
+
+1. Fetch it yourself (`curl` or browser) and read the response.
+2. Look at the status code and the body — a `200` on a guessed path may be a soft-404 (every request returns 200).
+3. Record what it is (login page, directory listing, backup archive, API endpoint).
+
+## Where this stops
+
+This guide is about finding and describing web surface. The *testing* — injection, auth bypasses, upload abuse, and everything else that tries to break the app — is covered in the Web Application Security section. Finish enumeration, build your inventory of endpoints and technologies, and stop there for this phase.
+
+## Command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `curl -I http://TARGET` | Response headers | Server + tech headers | Identify the stack |
+| `curl -s http://TARGET/robots.txt` | Robots file | Hidden path hints | Check those paths |
+| `nmap --script http-headers,http-title,http-enum TARGET` | Nmap web pass | Title, headers, common paths | Manual verification |
+| `gobuster dir -u URL -w WORDLIST -x php,txt` | Directory/file discovery | Found paths | Fetch and inspect each |
+| `feroxbuster -u URL -w WORDLIST -r` | Recursive discovery | Deep directory tree | Enumerate found apps |
+| `ffuf -u URL/FUZZ -w WORDLIST` | Fuzzing (dirs, params, vhosts) | Matching responses | Review filtered results |
+| `nikto -h http://TARGET` | Known-issue scan | Candidate issues + false positives | Verify everything manually |
+
+## Common mistakes
+
+- **Stopping at the homepage.** The interesting application is usually three directories deep.
+- **Ignoring vhosts** and assuming one server equals one app.
+- **Trusting scanner output without fetching the pages.** Soft-404s produce false positives.
+- **Not trying extensions.** A `.php` or `.aspx` app hides its endpoints from extension-less scans.
+- **Skipping `robots.txt` and backup-file checks.** They are cheap and frequently leak paths.
+- **Forgetting that this is enumeration, not exploitation.** Discovery of a login page is not a vulnerability.
+
+## Related guides
+
+- [Gobuster](/guides/info-gathering/gobuster) — directory, DNS, and vhost brute-forcing.
+- [Feroxbuster](/guides/info-gathering/feroxbuster) — recursive discovery.
+- [ffuf](/guides/info-gathering/ffuf) — fuzzing directories, parameters, and virtual hosts.
+- [Nikto](/guides/info-gathering/nikto) — known-issue scanning and its limits.
+- Later: [Web Application Security](/guides/web) — the exploitation side of everything you enumerate here.

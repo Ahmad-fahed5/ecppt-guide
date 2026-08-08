@@ -1,0 +1,209 @@
+---
+title: Nmap Scanning Methodology
+description: A realistic six-step Nmap workflow — host discovery, fast scan, full scan, versions, scripts, and target-specific enumeration.
+section: info-gathering
+phase: 1
+order: 4
+difficulty: intermediate
+draft: false
+tags: ['nmap', 'methodology', 'workflow']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import Checklist from '../../../components/ui/Checklist.astro';
+
+## Why methodology matters more than memorizing commands
+
+Knowing `nmap -A` by heart does not make you a good scanner. Knowing **what question each scan answers, in what order, and when to stop scanning and start enumerating** is the actual skill. The difference between a beginner and an experienced tester is not more flags — it is deciding which flags to run *now* and which to hold back.
+
+This guide teaches a repeatable workflow you can apply to any host or range in an authorized lab.
+
+## The six-step workflow
+
+### Step 1 — Host discovery
+
+Find the live hosts before anything else. You do not want to spend hours scanning dead addresses.
+
+<CodeBlock
+  lang="bash"
+  title="Step 1: host discovery"
+  code={`nmap -sn 10.10.10.0/24`}
+/>
+
+If the range is known to be hostile to ICMP, add TCP probes:
+
+<CodeBlock
+  lang="bash"
+  title="Step 1b: TCP-based discovery"
+  code={`nmap -sn -PS22,80,443,445 10.10.10.0/24`}
+/>
+
+**Decision point:** Take the list of live hosts and move to Step 2. If a host in scope looks dead but you suspect it exists, note it and revisit with `-Pn` later.
+
+### Step 2 — Fast TCP scan
+
+Get a quick picture of each live host before spending time on deep scans. The goal is triage: which hosts have services worth your attention.
+
+<CodeBlock
+  lang="bash"
+  title="Step 2: fast triage scan"
+  code={`nmap -T4 --top-ports 1000 10.10.10.10 10.10.10.11 10.10.10.42`}
+/>
+
+This finishes quickly and tells you which hosts have web servers, SMB, SSH, and so on. It is deliberately cheap — you are building the shape of the network, not finishing it.
+
+### Step 3 — Full TCP port scan
+
+For every host with at least one open port (or every host you care about), scan **all 65535 TCP ports**. This is where the hidden services show up: admin ports, custom services, databases on unusual numbers.
+
+<CodeBlock
+  lang="bash"
+  title="Step 3: full port scan on a single host"
+  code={`nmap -p- -T4 --open -oA scans/target-full 10.10.10.42`}
+/>
+
+Notes on this command:
+
+- `-p-` scans every TCP port.
+- `--open` hides closed and filtered ports, keeping the output readable.
+- `-oA scans/target-full` saves the result before you forget.
+
+On a large range, run this per-host in parallel (different terminals or `&`) rather than as one giant command.
+
+### Step 4 — Service and version enumeration
+
+Now that you know which ports are open, identify what actually runs on them.
+
+<CodeBlock
+  lang="bash"
+  title="Step 4: versions on the open ports"
+  code={`nmap -sV -p22,80,445 -oA scans/target-versions 10.10.10.42`}
+/>
+
+Alternatively combine the earlier discovery with version detection on the full range in one pass:
+
+<CodeBlock
+  lang="bash"
+  title="Step 4b: versions across the network"
+  code={`nmap -sV -p- --open -oA scans/net-versions 10.10.10.10 10.10.10.11 10.10.10.42`}
+/>
+
+**Why versions matter:** "Apache 2.4.49" is an attack plan; "http" is a guess. Keep the version list next to your notes — it drives everything in [Service & Version Enumeration](/guides/info-gathering/service-version-enumeration).
+
+### Step 5 — NSE enumeration
+
+Run the safe default scripts against the services you care about. This is automated enumeration, not exploitation.
+
+<CodeBlock
+  lang="bash"
+  title="Step 5: default scripts"
+  code={`nmap -sC -p22,80,445 -oA scans/target-scripts 10.10.10.42`}
+/>
+
+Add targeted scripts for the services you found (SMB, HTTP, DNS, SSH):
+
+<CodeBlock
+  lang="bash"
+  title="Step 5b: service-specific scripts"
+  code={`nmap --script smb-enum-shares,smb-os-discovery -p445 10.10.10.42`}
+/>
+
+See [NSE Scripts](/guides/info-gathering/nse-scripts) for the script library and how to pick them.
+
+### Step 6 — Target-specific enumeration
+
+NSE is generic. Now you start the *manual* part: enumerating each service the way its protocol expects. This is where Nmap hands off to the rest of the toolkit:
+
+- Web ports → [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) (Gobuster, Feroxbuster, ffuf, Nikto)
+- SMB/NetBIOS → [SMB / NetBIOS Enumeration](/guides/info-gathering/smb-netbios-enumeration)
+- 53/UDP DNS → DNS enumeration (dig, nslookup, zone transfers)
+- 161/162 UDP → SNMP enumeration (snmpwalk)
+- 2049 NFS → `showmount -e`, mount checks
+
+The full decision logic lives in [Enumeration Methodology](/guides/info-gathering/enumeration-methodology).
+
+## Why one giant command is a bad default
+
+It is tempting to run `nmap -A -p- -sS -sU -sC TARGET` on everything. Reasons to resist:
+
+- **You cannot adapt.** The scan runs the same expensive checks on an empty host and a juicy one.
+- **It is slow and noisy.** UDP plus full TCP plus scripts multiplies runtime and traffic for every host, even the ones that do not need it.
+- **Results are harder to reason about.** Mixing phases makes it hard to tell what you know vs. what you guessed.
+- **You waste your limited scan budget.** On large ranges or monitored environments, indiscriminate heavy scanning is both slow and suspicious.
+
+Phased scanning lets you spend the expensive steps only where they earn their keep: host discovery narrows the range, the fast scan picks the interesting hosts, and the deep scans focus on those.
+
+<Alert variant="info" title="When a big command is fine">
+  On a <strong>single lab host</strong> that you already know is in scope, combining steps is perfectly reasonable. The methodology is about <em>ranges</em> and about knowing what each flag does — not a religion about command length.
+</Alert>
+
+## A practical workflow checklist
+
+<Checklist
+  id="nmap-methodology"
+  title="Nmap workflow checklist"
+  items={[
+    'Confirm scope: exact IPs/CIDRs and permissions',
+    'Step 1 — Host discovery (nmap -sn RANGE)',
+    'Step 2 — Fast top-1000 scan on live hosts',
+    'Step 3 — Full -p- scan on each interesting host (save with -oA)',
+    'Step 4 — -sV version detection on open ports',
+    'Step 5 — -sC default scripts + targeted service scripts',
+    'Step 6 — Manual service enumeration (web, SMB, DNS, SNMP...)',
+    'Record every scan output with -oA into a scans/ folder',
+    'Track UDP consideration separately (targeted, not full-range)',
+    'Summarize findings before moving to exploitation',
+  ]}
+/>
+
+## The workflow in one diagram
+
+<CodeBlock
+  lang="text"
+  title="Phased scanning flow"
+  code={`Host discovery (fast, -sn)
+      ↓
+Fast TCP scan (top 1000)  ──→  pick interesting hosts
+      ↓
+Full TCP scan (-p-)  ──→  complete port map
+      ↓
+Version detection (-sV)  ──→  services + versions
+      ↓
+NSE scripts (-sC, --script)  ──→  automated enumeration
+      ↓
+Manual service enumeration  ──→  web / SMB / DNS / SNMP / NFS
+      ↓
+Exploitation decisions`}
+/>
+
+## Command reference
+
+| Command | Step | Purpose | Expected result | Investigate next |
+|---|---|---|---|---|
+| `nmap -sn RANGE` | 1 | Host discovery | List of live hosts | Port scan survivors |
+| `nmap -T4 --top-ports 1000 HOST` | 2 | Fast triage | Which services exist | Deep scan interesting hosts |
+| `nmap -p- --open -oA file HOST` | 3 | Full TCP map | All open TCP ports | Version detection |
+| `nmap -sV -p<ports> HOST` | 4 | Versions | Service + version strings | Vulnerability research |
+| `nmap -sC -p<ports> HOST` | 5 | Default scripts | Automated enum output | Manual enumeration |
+| `nmap --script <script> -p<port> HOST` | 5b | Targeted scripts | Protocol-specific detail | Confirm manually |
+
+## Common mistakes
+
+- **Skipping host discovery** and wasting hours scanning dead space.
+- **Jumping straight to `-A` on every host** instead of phased scanning.
+- **Only scanning the top 1000 ports** — the interesting service is often on 8080, 8443, or 5985.
+- **Not saving output.** `-oA` is free; losing your scan history is not.
+- **Treating the default scan as the final scan.** It is the triage, not the result.
+- **Letting one host consume all your time** while the rest of the range waits. Note it and move on.
+
+## Related guides
+
+- [Host Discovery](/guides/info-gathering/host-discovery) — Step 1 in depth.
+- [Nmap Fundamentals](/guides/info-gathering/nmap-fundamentals) — the individual commands behind each step.
+- [NSE Scripts](/guides/info-gathering/nse-scripts) — Step 5 in depth.
+- [Service & Version Enumeration](/guides/info-gathering/service-version-enumeration) — Step 4 output, used.
+- [Enumeration Methodology](/guides/info-gathering/enumeration-methodology) — Step 6 and the decisions beyond scanning.
+- [Enumeration Checklist](/guides/info-gathering/enumeration-checklist) — the full checklist for one host.
