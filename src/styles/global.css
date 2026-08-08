@@ -312,6 +312,10 @@ a {
     border-right: 1px solid var(--border);
     border-bottom: none;
   }
+
+  .nav-overlay {
+    display: none;
+  }
 }
 
 @media (max-width: 979px) {
