@@ -1,0 +1,147 @@
+---
+title: Cross-Site Scripting
+description: Reflected, stored, and DOM-based XSS — recognizing input reflection and context, basic testing, impact, and common defenses, scoped to what a pentester actually tests.
+section: web
+phase: 3
+order: 10
+difficulty: intermediate
+draft: false
+tags: ['xss', 'cross-site-scripting', 'javascript', 'reflected', 'stored', 'dom']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## What XSS is
+
+Cross-site scripting (XSS) lets an attacker run JavaScript in a victim's browser, in the context of a trusted site. The attacker's code can then read the page, read cookies (if not `HttpOnly`), act as the logged-in user, and redirect to phishing pages.
+
+**Why it matters in the workflow:** XSS is rarely the end of a chain — it is usually a stepping stone. It can steal a session, perform state-changing actions as the victim, or help pivot inside a web application during an authorized test.
+
+## The three types
+
+| Type | Where the payload lives | How you find it |
+|---|---|---|
+| **Reflected** | Only in the response to a crafted request | Put input in a parameter; it appears back in the page immediately |
+| **Stored** | Persisted by the app (comments, profile, posts) | Submit content; it renders for other users later |
+| **DOM-based** | Never sent to the server; client-side JS reads it (e.g., `location.hash`) | Inspect the page's JavaScript, not the server response |
+
+## Input reflection and context
+
+The engine of XSS testing is finding **places where your input is reflected into the page**, then working out the HTML/JS context:
+
+- **Between tags** — `Hello <b>yourinput</b>` → inject a new tag.
+- **Inside an attribute** — `value="yourinput"` → break out with `"><script>...`.
+- **Inside a script block** — `var x = 'yourinput'` → break the string with `';...`.
+- **Inside a URL** — `href="yourinput"` → `javascript:` scheme.
+
+<CodeBlock
+  lang="text"
+  title="Context changes the payload"
+  code={`Context: <p>Hi, NAME</p>
+Payload:  <script>alert(1)</script>
+
+Context: <input value="NAME">
+Payload:  "><script>alert(1)</script>
+
+Context: var name = "NAME";
+Payload:  "; alert(1); //
+`}
+/>
+
+## Basic testing
+
+### 1. Find reflections
+
+Submit a unique token (e.g., `x7z99`) into every input and parameter; find where it reappears in the response:
+
+<CodeBlock
+  lang="text"
+  title="Find the reflection"
+  code={`?search=x7z99
+-> response contains x7z99 ? then it is a candidate
+   note exactly WHERE it appears (tag/attribute/script/url)
+`}
+/>
+
+- **Purpose:** map reflection points and contexts before writing any payload.
+- **Expected result:** a list of inputs that echo back.
+- **Investigate next:** for each, build a context-appropriate proof.
+
+### 2. Confirm with a harmless proof
+
+Use `alert(1)` or `alert(document.domain)` as the classic proof — visible, harmless, and obvious to an evaluator:
+
+<CodeBlock
+  lang="text"
+  title="Reflected proof (lab)"
+  code={`?search=<script>alert(document.domain)</script>
+`}
+/>
+
+- **Purpose:** demonstrate script execution in the victim's context.
+- **Expected result:** an alert box with the site's domain.
+- **Investigate next:** replace the proof with a real impact (cookie read, fetch, redirect) only where the lab allows.
+
+### 3. Test stored sinks
+
+Post a value that renders for other users (comments, name fields, reviews). If it executes when a different user loads it, it is stored XSS — higher impact than reflected.
+
+### 4. Look for DOM sinks
+
+In the browser's dev tools, search the page's JS for sinks like `innerHTML`, `document.write`, `eval`, `location`, and see whether any reads from `location.hash`, `location.search`, or `document.referrer`:
+
+<CodeBlock
+  lang="text"
+  title="DOM XSS pattern"
+  code={`// page JS reads the fragment:
+document.write(location.hash.substring(1));
+
+// payload:  #<img src=x onerror=alert(1)>
+// never leaves the browser; server response looks clean
+`}
+/>
+
+## Impact
+
+What the JavaScript can actually do:
+
+- **Cookie theft** — read `document.cookie` (blocked by `HttpOnly`).
+- **Session hijack** — replay the stolen cookie in Burp/curl.
+- **State-changing actions** — act as the victim: change password, transfer, post.
+- **Keylogging/phishing** — capture keystrokes or render a fake login.
+- **CSRF enablement** — the script can perform actions the CSRF protections should stop.
+
+<Alert variant="info" title="HttpOnly is the first defense line">
+  If the session cookie is `HttpOnly`, XSS cannot read it directly. That reduces impact but does not fix the vulnerability — the script can still act as the user. Cookie flag review belongs to [Authentication & Authorization](/guides/web/authentication-authorization).
+</Alert>
+
+## Common defenses
+
+| Defense | What it blocks |
+|---|---|
+| Output encoding | Turning your input into inert text in the right context |
+| Input validation | Rejecting suspicious payloads at the boundary (less reliable) |
+| `HttpOnly` cookies | JavaScript cookie theft |
+| Content Security Policy (CSP) | Restricting what scripts can load/run |
+
+<SourceTag source="practical" /> For a tester, the practical takeaway: **the absence of output encoding is the vulnerability**. Most XSS findings are about the site echoing input into an unsafe context, not about clever payloads.
+
+## Common mistakes
+
+- **Testing only one context** — a payload that works in an attribute fails between tags; test all contexts.
+- **Only using `<script>` tags** — filters and modern parsing break them; attributes and event handlers often work instead.
+- **Stopping at reflected alert** — reflecting is only the proof; assess real impact (cookie, actions).
+- **Forgetting stored XSS** in comment/profile-style fields.
+- **Ignoring the DOM** — a clean server response does not mean the page is clean.
+- **Not checking `HttpOnly`** and overstating the impact of cookie theft.
+
+## Related guides
+
+- [Web Fundamentals](/guides/web/web-fundamentals) — where input is reflected (headers, parameters, cookies).
+- [CSRF](/guides/web/csrf) — XSS and CSRF often pair in a real attack chain.
+- [Authentication & Authorization](/guides/web/authentication-authorization) — session-cookie context.
+- [Web Exploitation Methodology](/guides/web/web-exploitation-methodology) — where XSS findings fit.

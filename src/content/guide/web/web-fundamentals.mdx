@@ -1,0 +1,253 @@
+---
+title: Web Fundamentals
+description: How web applications actually work — the client/server model, HTTP vs HTTPS, methods, headers, cookies, sessions, parameters, status codes, and why every pentester must understand them.
+section: web
+phase: 3
+order: 1
+difficulty: beginner
+draft: false
+tags: ['web', 'http', 'https', 'fundamentals', 'methods', 'status-codes']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## What this guide is about
+
+Before you can test web applications you have to understand what they are made of. This guide explains the core concepts — how browsers and servers talk, what a request and a response actually contain, and what all those status codes and headers mean — with the pentesting relevance called out at every step.
+
+<Alert variant="info" title="Prerequisites">
+  This guide assumes you have already mapped a target and found a web service, as covered in the [Information Gathering](/guides/info-gathering) section. If Nmap reported `80/tcp http` or `443/tcp https`, you are exactly where this guide starts.
+</Alert>
+
+## How web applications work
+
+A web application is a program that runs on a server and is accessed through a browser. The browser sends an **HTTP request** asking for a resource; the server runs application code, often touching a database or files, and sends back an **HTTP response**.
+
+<CodeBlock
+  lang="text"
+  title="The request/response round trip"
+  code={`Browser                        Server
+   |                              |
+   |-- HTTP request (GET /login) ->|
+   |                              |  app runs PHP/Python/Node...
+   |                              |  reads config / queries DB
+   |<- HTTP response (200 OK) ----|
+   |   HTML page / JSON / redirect|
+`}
+/>
+
+The important insight for testing: **everything the server does in between is driven by data you control** — the URL, headers, cookies, and body you send. The more precisely you understand those inputs, the better you can test how the server handles them.
+
+## Client/server model
+
+- **Client** — typically a browser, but also curl, Burp Suite, or a script. It initiates requests.
+- **Server** — listens for requests, runs application logic, and returns responses.
+
+For a pentester this distinction matters because you are not limited to the browser. Tools like `curl` and Burp let you send a request exactly as you choose, and observe the response with nothing hidden. That is the fundamental skill this whole phase builds on.
+
+## HTTP vs HTTPS
+
+- **HTTP** (port 80) transmits in plaintext. Everything in the request — including session cookies and passwords — can be read by anyone on the path.
+- **HTTPS** (port 443) runs HTTP inside TLS encryption. It protects confidentiality and integrity of the data in transit.
+
+<Alert variant="warning" title="What HTTPS does NOT do">
+  HTTPS encrypts the connection; it says nothing about whether the application itself is secure. SQL injection, XSS, and weak authentication all still exist over HTTPS. Testing habits are the same — only the traffic capture differs (Burp can intercept HTTPS if you install its CA certificate).
+</Alert>
+
+## HTTP methods
+
+The method is the verb at the start of a request line — it tells the server what kind of action is intended. For testing, the two that matter most are GET and POST.
+
+| Method | Purpose | Typical use | Pentesting note |
+|---|---|---|---|
+| `GET` | Retrieve a resource | Page loads, links, search | Parameters travel in the URL — easy to see and modify |
+| `POST` | Submit data / create | Login, forms, uploads | Data travels in the request body — must inspect the body to see inputs |
+| `PUT` | Replace a resource | APIs, sometimes file upload | If allowed unauthenticated, it can be an upload vector |
+| `DELETE` | Remove a resource | APIs | If allowed unauthenticated, destructive |
+| `PATCH` | Partially update a resource | APIs | Often over-permissioned in badly built APIs |
+| `HEAD` | Headers only, no body | Health checks | Useful for probing without a full response |
+| `OPTIONS` | Ask what is allowed | APIs | Reveals allowed methods; useful recon |
+
+<SourceTag source="practical" /> During testing, if a site responds to `PUT` or `DELETE` when it should not, that is an access-control finding by itself — even without knowing what the resource is.
+
+<CodeBlock
+  lang="bash"
+  title="Testing method handling with curl"
+  code={`# What methods does the server advertise?
+curl -i -X OPTIONS http://10.10.10.42/
+
+# Does PUT actually work on an existing path?
+curl -i -X PUT http://10.10.10.42/config.json -d '{"note":"test"}'
+`}
+/>
+
+## Headers
+
+Headers are key-value lines that travel with the request and response. They carry metadata: the requested host, accepted formats, and — for responses — what software is running.
+
+Request headers you will read constantly:
+
+- **`Host`** — which site on the server you want (critical for virtual-host testing).
+- **`Cookie`** — your session token(s).
+- **`User-Agent`** — the client software.
+- **`Content-Type`** — the format of the request body (e.g., `application/x-www-form-urlencoded`, `application/json`).
+- **`Referer`** — where you came from.
+
+Response headers that tell you the most:
+
+- **`Server`** — web server software and sometimes OS.
+- **`X-Powered-By`** — backend language/framework (may be absent or faked).
+- **`Set-Cookie`** — the server creating a cookie (look for `HttpOnly`, `Secure`, `SameSite`).
+- **`Location`** — target of a redirect.
+- **`Content-Security-Policy`** — a hardening header that reflects the site's security posture.
+
+## Cookies
+
+Cookies are small pieces of data the server asks the browser to store and send back on every subsequent request. Their most important use is **session tracking**: after login the server sets a cookie, and the browser presents it on every request so the server knows who you are.
+
+Cookie attributes to read during a test:
+
+| Attribute | What it means | Why you care |
+|---|---|---|
+| `HttpOnly` | JavaScript cannot read the cookie | Missing → XSS may steal it |
+| `Secure` | Only sent over HTTPS | Missing → could leak over HTTP |
+| `SameSite` | Controls cross-site sending | `None` enables CSRF |
+| `Path` | Which paths the cookie applies to | Scoping |
+| `Expires`/`Max-Age` | Lifetime | Session length |
+
+## Sessions
+
+A session is the server-side record of "this connection belongs to a logged-in user". The browser only holds the session identifier (the cookie); the server holds the real data (who is logged in, their cart, their role).
+
+Session-related things to test:
+
+- Can you **predict** or **manipulate** the session ID?
+- Is the session ID the **same before and after login** (fixation)?
+- Does logout actually **invalidate** the session?
+- Do sessions expire, or does the ID last forever?
+- Is a session ID reused across users?
+
+## Parameters: query strings and request bodies
+
+Parameters are how a client passes data to the application. They arrive in two main places:
+
+**Query string (GET)** — data in the URL after `?`:
+
+<CodeBlock
+  lang="text"
+  title="Query string anatomy"
+  code={`https://10.10.10.42/products?id=42&lang=en
+                       ^           ^      ^
+                       |           |      value
+                       |       parameter name
+                   query string starts with ?
+`}
+/>
+
+**Request body (POST)** — data in the message body:
+
+<CodeBlock
+  lang="text"
+  title="URL-encoded form body"
+  code={`POST /login HTTP/1.1
+Host: 10.10.10.42
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=secret
+`}
+/>
+
+<Alert variant="danger" title="The golden habit">
+  Every parameter the application accepts is a potential test point. When you see `id=42`, `?page=2`, `?file=readme.txt`, or a search box, you are looking at a candidate for parameter tests: manipulation, injection, traversal, and more. See [Web Enumeration](/guides/web/web-enumeration) and [HTTP Requests & Responses](/guides/web/http-requests-responses).
+</Alert>
+
+## Status codes
+
+The response status code is the server's three-digit verdict. Learn the shape of the ranges and the specific codes that matter:
+
+| Range | Meaning |
+|---|---|
+| `1xx` | Informational |
+| `2xx` | Success |
+| `3xx` | Redirect |
+| `4xx` | Client error (you asked for something wrong) |
+| `5xx` | Server error (server crashed while handling your request) |
+
+| Code | Meaning | Pentesting note |
+|---|---|---|
+| `200 OK` | Success | Normal |
+| `301/302` | Redirect | A `Location` header change can leak logic; `302` after login is common |
+| `401` | Unauthorized | You must authenticate |
+| `403` | Forbidden | You are authenticated but not allowed — access-control territory |
+| `404` | Not found | The resource does not exist |
+| `405` | Method not allowed | Server understood the path but not the method |
+| `429` | Too many requests | Rate limiting exists |
+| `500` | Internal server error | Often a sign an input broke the application — investigate |
+| `502/503` | Gateway/upstream unavailable | Proxies, load balancers |
+
+<SourceTag source="practical" /> The **difference between 401 and 403** is one of the most useful signals in the whole phase: 401 = "prove who you are", 403 = "I know who you are, and you may not". Distinguishing them tells you whether a path is protected by authentication or by authorization, which drives what you test next.
+
+## Basic web technologies
+
+You will meet these repeatedly:
+
+- **Web server** — Apache, Nginx, IIS. It serves files and proxies to application servers.
+- **Backend language** — PHP, Python (Flask/Django), Node.js, Java, ASP.NET. Determines many vulnerability classes (and their syntax).
+- **Framework** — Laravel, Rails, Spring, Express. Often comes with predictable structure and routes.
+- **Database** — MySQL, PostgreSQL, MSSQL, SQLite, MongoDB. The usual target of injection.
+- **Frontend** — HTML, CSS, JavaScript. The browser side; where XSS lives.
+- **Proxy / load balancer** — sits in front and forwards traffic; can rewrite headers.
+
+The fastest way to identify a stack is the technique checklist in [Web Enumeration](/guides/web/web-enumeration), which builds on [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) from Phase 2.
+
+## Why this matters during a penetration test
+
+Every finding in the rest of this phase is expressed in these terms: a parameter that reaches a database (SQL injection), a header that reflects user input (XSS), a cookie that is not protected (session issues), a status-code difference that reveals an endpoint (access control). If the fundamentals are solid, the vulnerability guides become patterns to recognize rather than checklists to memorize.
+
+## Quick reference: a request and response, fully labelled
+
+<CodeBlock
+  lang="text"
+  title="Request"
+  code={`POST /login HTTP/1.1          <- method + path + version
+Host: 10.10.10.42              <- Host header
+User-Agent: curl/8.5.0         <- client identity
+Cookie: PHPSESSID=abc123       <- session token
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=test   <- body parameters
+`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="Response"
+  code={`HTTP/1.1 302 Found            <- status line
+Server: nginx/1.18.0            <- server software
+Location: /dashboard            <- where to go next
+Set-Cookie: PHPSESSID=xyz789; path=/; HttpOnly
+Content-Type: text/html
+
+<html>...</html>                <- body
+`}
+/>
+
+## Common mistakes
+
+- **Only ever using a browser**, which hides the raw request/response — use curl and Burp Repeater.
+- **Ignoring the body of POST requests** when looking for testable parameters.
+- **Treating HTTPS as "secure"** — it protects the wire, not the application.
+- **Not reading `Set-Cookie` attributes** (HttpOnly, Secure, SameSite) at login.
+- **Forgetting the `Host` header matters** — one server can host many sites.
+- **Confusing 401 (authentication) with 403 (authorization)** and testing the wrong thing.
+
+## Related guides
+
+- [HTTP Requests & Responses](/guides/web/http-requests-responses) — the exact anatomy, with examples you will recognize from Burp.
+- [Web Enumeration](/guides/web/web-enumeration) — turn "there is a web server" into a map of the application.
+- [Burp Suite Methodology](/guides/web/burp-suite-methodology) — the tool you will use to inspect and modify these requests.
+- [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) — Phase 2's bridge into the web stack.

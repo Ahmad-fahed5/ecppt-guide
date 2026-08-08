@@ -1,0 +1,125 @@
+---
+title: Web Testing Checklist
+description: The complete interactive web testing checklist — from confirming HTTP/HTTPS to documenting findings — covering the full Phase 3 workflow for every web target.
+section: web
+phase: 3
+order: 14
+difficulty: beginner
+draft: false
+tags: ['checklist', 'methodology', 'web', 'revision']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import Checklist from '../../../components/ui/Checklist.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## How to use this checklist
+
+Work this list for **every web service** you take on in a lab. It is the distilled version of the whole web section — follow the items in order, tick them as you go, and your notes will contain the complete attack surface for the [exploitation](/guides/exploitation) phase.
+
+<Alert variant="info" title="Progress is saved">
+  This checklist stores its state <strong>locally in your browser</strong>. Refresh the page and your ticks survive. Use the Reset button to start a fresh web target.
+</Alert>
+
+<SourceTag source="practical" /> This is a *working* checklist, not an OWASP compliance sheet. Each item exists because it feeds the next decision in [Web Exploitation Methodology](/guides/web/web-exploitation-methodology).
+
+## The full checklist
+
+<Checklist
+  id="web-testing-checklist"
+  title="Web application testing checklist"
+  items={[
+    'HTTP/HTTPS identified — ports 80/443 confirmed and requested',
+    'Technology identified — web server, language, framework noted',
+    'Headers reviewed — Server, X-Powered-By, security headers',
+    'Cookies reviewed — HttpOnly, Secure, SameSite on every Set-Cookie',
+    'robots.txt checked — Disallow entries harvested',
+    'sitemap.xml checked — URLs harvested',
+    'Virtual hosts tested — Host header variations for alternate apps',
+    'Directories enumerated — brute-force + harvest results mapped',
+    'Files enumerated — backups, configs, .git, interesting downloads',
+    'Parameters identified — every input: URL, body, headers, API JSON',
+    'Endpoints discovered — links, forms, JavaScript, API routes',
+    'Authentication tested — login, default creds (lab), rate limiting',
+    'Session management tested — cookie lifecycle, logout, expiry, fixation',
+    'Authorization tested — roles, direct URL access, method changes',
+    'IDOR tested — object references swept across ids',
+    'SQL injection tested — quote probes, boolean/time, manual first',
+    'File inclusion tested — traversal, LFI, wrappers',
+    'File upload tested — extension/MIME/content, execution confirmed',
+    'Command injection tested — separators, blind timing',
+    'XSS tested — reflections, contexts, stored/DOM candidates',
+    'CSRF tested — state-changing requests, tokens, SameSite',
+    'Initial access opportunities reviewed — shells, config creds, routes',
+    'Findings documented — request, response, and evidence per finding',
+    'Next attack path identified — what to test or exploit next',
+  ]}
+/>
+
+## What each item really means
+
+- **HTTP/HTTPS identified** — you made an actual request and saw the response, not just an Nmap line.
+- **Technology identified** — stack known; drives extension choices and syntax guesses (see [Web Enumeration](/guides/web/web-enumeration)).
+- **Headers reviewed** — `Server`/`X-Powered-By` give the stack; security headers tell you hardening posture.
+- **Cookies reviewed** — `HttpOnly`/`Secure`/`SameSite` at login shape XSS and CSRF impact (see [Web Fundamentals](/guides/web/web-fundamentals)).
+- **robots.txt / sitemap.xml** — free paths; always read before brute-forcing.
+- **Virtual hosts tested** — different `Host` values can reveal a different app on the same IP.
+- **Directories / files enumerated** — the route map; note status codes for every hit.
+- **Parameters identified** — the test targets; without this list the rest of the checklist has nothing to act on.
+- **Endpoints discovered** — the JS/forms harvest beyond wordlists.
+- **Authentication tested** — login behaviour, not just "it works".
+- **Session management tested** — the cookie lifecycle from [Authentication & Authorization](/guides/web/authentication-authorization).
+- **Authorization tested** — direct URL access and method changes, not just the UI.
+- **IDOR tested** — object ids swept with a second account.
+- **SQL injection tested** — manual probes before automation (see [SQL Injection](/guides/web/sql-injection)).
+- **File inclusion / upload / command injection / XSS / CSRF tested** — the [vulnerability guides](/guides/web/web-exploitation-methodology) each define the minimal proof.
+- **Initial access opportunities reviewed** — everything that could turn a finding into a shell.
+- **Findings documented** — exact request + response saved; evidence is the deliverable.
+- **Next attack path identified** — the honest answer to "what do I do next".
+
+## Quick command cheat-sheet
+
+<CodeBlock
+  lang="bash"
+  title="The essentials, in checklist order"
+  code={`# 1. Confirm + identify
+curl -i http://TARGET
+whatweb http://TARGET
+
+# 2. Free intel
+curl -s http://TARGET/robots.txt
+curl -s http://TARGET/sitemap.xml
+
+# 3. Vhosts
+curl -H "Host: candidate" http://TARGET/
+
+# 4. Enumerate
+gobuster dir -u http://TARGET -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x php,txt,bak
+curl -s http://TARGET/ | grep -Eo '(href|action|src)="[^"]*"'
+
+# 5. Probes (one class per confirmed parameter)
+# SQLi:      ?id=42'  /  ?id=42 AND 1=2  /  ?id=42 AND SLEEP(5)
+# LFI:       ?page=../../../../etc/passwd
+# Cmd inject:?host=TARGET; id
+# XSS:       ?search=<script>alert(document.domain)</script>
+`}
+/>
+
+## Common mistakes
+
+- **Ticking an item because you ran a command** — a tick means you *interpreted* the result, not just that you sent it.
+- **Skipping parameters and going straight to exploitation** — the checklist only works when the map is complete.
+- **Testing one context** for a class (one parameter, one injection type) and calling it covered.
+- **Forgetting to capture evidence** — the exact request/response pair per finding.
+- **Not ending with the next step** — the checklist's last item decides where the [next phase](/guides/exploitation) starts.
+
+## Related guides
+
+- [Web Exploitation Methodology](/guides/web/web-exploitation-methodology) — the decision tree this checklist tracks.
+- [Web Enumeration](/guides/web/web-enumeration) — the discovery half of the checklist.
+- [Authentication & Authorization](/guides/web/authentication-authorization) — the auth/authz half.
+- [SQL Injection](/guides/web/sql-injection), [Local & Remote File Inclusion](/guides/web/local-remote-file-inclusion), [File Upload Vulnerabilities](/guides/web/file-upload-vulnerabilities), [Command Injection](/guides/web/command-injection), [Cross-Site Scripting](/guides/web/cross-site-scripting), [CSRF](/guides/web/csrf) — the vulnerability items, each in depth.
+- [Web Shells & Initial Access](/guides/web/web-shells-initial-access) — what "initial access opportunities" leads to.

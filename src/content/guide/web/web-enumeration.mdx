@@ -1,0 +1,198 @@
+---
+title: Web Enumeration
+description: Systematic web application enumeration — from the moment Nmap reports 80/443 to a full map of technologies, virtual hosts, directories, files, parameters, and endpoints.
+section: web
+phase: 3
+order: 2
+difficulty: beginner
+draft: false
+tags: ['web', 'enumeration', 'http', 'whatweb', 'robots.txt', 'vhosts']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## Where this guide starts
+
+Phase 2 got you to the front door: Nmap reported `80/tcp http` or `443/tcp https`. This guide is the systematic walk through that door — identify the technology, map the routes, find the parameters, and record enough detail that the vulnerability phase has concrete targets.
+
+The phase-2 tool guides ([Gobuster](/guides/info-gathering/gobuster), [Feroxbuster](/guides/info-gathering/feroxbuster), [ffuf](/guides/info-gathering/ffuf), [Nikto](/guides/info-gathering/nikto)) are not duplicated here. This page tells you **when and why** to use each, in the right order.
+
+## The web enumeration loop
+
+Think of web enumeration as repeating one small loop:
+
+**Input → Enumeration → Finding → Decision → Next action**
+
+<CodeBlock
+  lang="text"
+  title="The loop"
+  code={`New input (URL, header, parameter)
+        |
+        v
+   Run a check -----------> Finding?
+        |                       |
+        | no                    v
+        v                  Is it interesting?
+   Next input <---- yes ---    |   |
+                               |   no
+                         Test/record    |
+                               ^        |
+                               |________|
+`}
+/>
+
+Example run: you learn the app is PHP (finding) → you decide that means test `.php` extensions → next action: wordlist with `.php` files. Each finding either deepens the map or becomes a lead for the vulnerability phase.
+
+## Step 1 — Confirm and identify the web service
+
+Nmap told you the port. Now grab the basics:
+
+<CodeBlock
+  lang="bash"
+  title="Headers first"
+  code={`curl -i http://10.10.10.42/`}
+/>
+
+- **Purpose:** see the raw response — status, headers, and body start.
+- **Expected result:** `Server`, `X-Powered-By`, `Set-Cookie` values and the page itself.
+- **Investigate next:** the `Server` and `X-Powered-By` values drive technology guesses.
+
+Then fingerprint the stack with `whatweb` (or a browser extension — but treat it as a convenience, not proof):
+
+<CodeBlock
+  lang="bash"
+  title="Technology fingerprint"
+  code={`whatweb http://10.10.10.42/`}
+/>
+
+- **Purpose:** bundle HTTP headers, cookies, and page markers into a tech report.
+- **Expected result:** lines like `[200 OK] Apache[2.4.57] PHP[7.4.33]`.
+- **Investigate next:** confirm anything surprising by reading headers and source yourself.
+
+<SourceTag source="practical" /> Cross-check whatweb against the raw signals — it can misidentify behind reverse proxies or generic index pages. The headers and page source are ground truth.
+
+## Step 2 — Read the low-hanging fruit
+
+Before brute-forcing anything, read what the server is happy to hand you:
+
+<CodeBlock
+  lang="bash"
+  title="robots.txt, sitemap, and obvious files"
+  code={`curl -s http://10.10.10.42/robots.txt
+curl -s http://10.10.10.42/sitemap.xml
+curl -s -i http://10.10.10.42/.git/config   # only if .git is exposed
+curl -s http://10.10.10.42/admin            # common admin paths
+`}
+/>
+
+- **Purpose:** discover paths the site advertises or forgets to protect.
+- **Expected result:** `robots.txt` `Disallow:` entries, sitemap URLs, admin panels, backup files.
+- **Investigate next:** every URL found here becomes a directory/file enumeration seed.
+
+## Step 3 — Virtual hosts
+
+One server frequently hosts several sites, selected by the `Host` header. If `10.10.10.42` shows a default page but the DNS has other names (found in Phase 2 via subdomain/DNS enumeration), try them:
+
+<CodeBlock
+  lang="bash"
+  title="Testing a virtual host"
+  code={`curl -H "Host: portal.internal" http://10.10.10.42/`}
+/>
+
+- **Purpose:** reach vhosts that only resolve by hostname.
+- **Expected result:** a different application than the default site.
+- **Investigate next:** brute-force the `Host` header with ffuf to discover hidden vhosts (see [ffuf](/guides/info-gathering/ffuf)).
+
+## Step 4 — Directory and file enumeration
+
+Now run the brute-force tools. The order and wordlist matter more than the tool:
+
+1. **Gobuster** — quick directory discovery (see [Gobuster](/guides/info-gathering/gobuster)).
+2. **Feroxbuster** — recursive directory scanning (see [Feroxbuster](/guides/info-gathering/feroxbuster)).
+3. **ffuf** — fast, flexible fuzzing; also for parameters, vhosts, and extensions (see [ffuf](/guides/info-gathering/ffuf)).
+4. **Nikto** — a single noisy sweep for known web misconfigurations and default files (see [Nikto](/guides/info-gathering/nikto)).
+
+<CodeBlock
+  lang="bash"
+  title="A typical first pass"
+  code={`gobuster dir -u http://10.10.10.42 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -x php,txt,bak
+`}
+/>
+
+- **Purpose:** find directories and files with common names.
+- **Expected result:** paths like `/admin`, `/backup`, `/api`, `/config.php.bak`.
+- **Investigate next:** request each hit and note status codes — a 200 on `/admin` is a lead; a 302 to login is still a lead.
+
+<Alert variant="info" title="Wordlists">
+  The wordlist is the real ingredient. Start with `directory-list-2.3-medium.txt` or the `dirb/common.txt` tier, then escalate to larger lists only if the small one turns up nothing.
+</Alert>
+
+## Step 5 — Parameter and endpoint discovery
+
+The application has routes the wordlists cannot guess — the ones that appear in forms, links, and JavaScript. Collect them:
+
+- Every `<form>` on each page → its `action` and input names are parameters.
+- Every link and button → endpoints.
+- JavaScript and API calls → `fetch()`/`XHR` targets, often JSON endpoints.
+- Page source comments → sometimes leaked credentials or internal paths.
+
+<CodeBlock
+  lang="bash"
+  title="Mine the page for endpoints"
+  code={`curl -s http://10.10.10.42/ | grep -Eo '(href|action|src)="[^"]*"'
+curl -s http://10.10.10.42/ | grep -Eo 'fetch\([^)]*\)|\.ajax\([^)]*\)'
+`}
+/>
+
+- **Purpose:** harvest real URLs and parameters from the application itself.
+- **Expected result:** a list of endpoints and parameters you would not have guessed.
+- **Investigate next:** feed interesting parameters into ffuf for value fuzzing, then into the [vulnerability tests](/guides/web/web-exploitation-methodology).
+
+## Step 6 — Record what you found
+
+Web enumeration is worthless if the details evaporate. Keep a per-host note:
+
+| Fact | Example |
+|---|---|
+| URL | `http://10.10.10.42` |
+| Stack | Apache 2.4.57 + PHP 7.4.33 |
+| Frameworks | Laravel-style routes |
+| Vhosts | `portal.internal` (login page) |
+| Dirs | `/admin` (302), `/api/v1` (200) |
+| Parameters | `id`, `page`, `file`, `username` |
+| Auth | `/login` sets `PHPSESSID`, no HttpOnly |
+| Leads | `?file=` parameter → test traversal next |
+
+The [Web Testing Checklist](/guides/web/web-testing-checklist) codifies these fields so nothing is skipped.
+
+## Quick command reference
+
+| Command | Purpose | Expected result | Investigate next |
+|---|---|---|---|
+| `curl -i URL` | Raw response | Headers + body | Tech fingerprint |
+| `whatweb URL` | Stack identification | Tech stack report | Confirm against headers |
+| `curl -s URL/robots.txt` | Advertised paths | Disallow list | Enumerate those paths |
+| `curl -H "Host: name" URL` | Vhost probing | Alternate apps | ffuf Host fuzzing |
+| `gobuster dir ...` | Directory scan | Found paths | Request each hit |
+| `ffuf -w ... FUZZ URL?param=FUZZ` | Parameter value fuzz | Valid/invalid values | Injection tests |
+
+## Common mistakes
+
+- **Skipping technology identification** and brute-forcing blind with the wrong extensions.
+- **Brute-forcing before reading robots.txt/sitemap** — the site will often tell you the paths.
+- **Ignoring vhosts** and only ever testing the default site.
+- **Not harvesting endpoints from JavaScript/forms** and relying purely on wordlists.
+- **Not recording findings** — losing a discovered parameter costs you the next phase.
+- **Running Nikto first** because it is loud and fun, instead of after a real map exists.
+
+## Related guides
+
+- [Web Fundamentals](/guides/web/web-fundamentals) — the HTTP knowledge this page assumes.
+- [HTTP Requests & Responses](/guides/web/http-requests-responses) — reading what the server sends back.
+- [Web Service Enumeration](/guides/info-gathering/web-service-enumeration) — Phase 2's original web discovery guide.
+- [Gobuster](/guides/info-gathering/gobuster), [Feroxbuster](/guides/info-gathering/feroxbuster), [ffuf](/guides/info-gathering/ffuf), [Nikto](/guides/info-gathering/nikto) — the tools referenced here.
+- [Web Exploitation Methodology](/guides/web/web-exploitation-methodology) — what to do with the map you just built.

@@ -1,0 +1,136 @@
+---
+title: Burp Suite Methodology
+description: A practical Burp Suite workflow for pentesting — proxy setup, interception, Repeater, Intruder, HTTP history, request modification, and parameter testing, focused on methodology not menus.
+section: web
+phase: 3
+order: 4
+difficulty: beginner
+draft: false
+tags: ['burp', 'proxy', 'intercept', 'repeater', 'intruder', 'web']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## What this guide is, and is not
+
+This is not a menu-by-menu Burp manual. It is a **workflow**: how to use a handful of Burp features to inspect, modify, and test web requests the way a pentester actually does. If you understand Proxy, Repeater, Intruder, Target, and HTTP history, you can do the vast majority of web testing.
+
+## Setup: intercepting HTTPS
+
+Burp sits between your browser and the target. To see HTTPS you must install Burp's CA certificate in the browser's trusted store and set the browser proxy to Burp's listener (usually `127.0.0.1:8080`). Do this once, in your lab VM.
+
+<Alert variant="info" title="Scope discipline">
+  Before testing anything, add the target host to Burp's **Target → Scope**. Then switch interception to "only in-scope" so Burp does not capture (and slow down) every request your browser makes. This keeps the HTTP history clean and matches the engagement scope.
+</Alert>
+
+## The workflow at a glance
+
+<CodeBlock
+  lang="text"
+  title="Burp-driven testing loop"
+  code={`Browser <--> Burp Proxy <--> Target
+               |
+         HTTP history
+               |
+         Repeater (modify 1 request, compare)
+               |
+         Intruder (automate many values)
+               |
+         Findings -> notes
+`}
+/>
+
+## Feature by feature: when and why
+
+### Proxy — capture
+
+- **When:** the entire engagement. Your browser is pointed at Burp; every request passes through.
+- **Why:** you build the HTTP history that everything else reads.
+
+### Intercept — pause and modify
+
+- **When:** you want to change a request *before* it reaches the server (e.g., alter a parameter and forward it).
+- **Why:** lets you test a single field in isolation without changing the whole app.
+- **How:** Intercept is on → submit the form → request appears → edit it → Forward.
+
+<Alert variant="warning" title="Intercept stays on">
+  A classic mistake is leaving Intercept on and wondering why pages hang. Turn it on only when you want to edit a request, then off.
+</Alert>
+
+### Repeater — craft and compare
+
+- **When:** the core manual-testing tool. Send a captured request there, change one thing, hit Send.
+- **Why:** Repeater gives you an instant request/response pair you can iterate on — the bread and butter of [parameter testing](/guides/web/http-requests-responses).
+
+<CodeBlock
+  lang="text"
+  title="Repeater loop"
+  code={`Original request -> 200 OK, length 4521
+Change id=42 -> 200 OK, length 4521   (no change)
+Change id=43 -> 200 OK, length 4521   (no change)
+Change id=41 -> 403, length 210       (different!)
+-> investigate: why is 41 different?
+`}
+/>
+
+### Intruder — automate
+
+- **When:** you need to try many values against one position (parameter fuzzing, ID enumeration, password guessing on a lab target, header fuzzing).
+- **Why:** it replaces dozens of manual Repeater sends with one configurable attack.
+- **How:** highlight a value → Add `§` markers → choose payloads → Run → sort by status/length.
+
+<Alert variant="info" title="Intruder payloads">
+  Use wordlists from your lab tools (e.g., `/usr/share/wordlists/`). Sort results by response length and status — anomalies stand out against the uniform baseline.
+</Alert>
+
+### Target & HTTP history — the map
+
+- **When:** continuously.
+- **Why:** history is the passive record of everything you sent and received. Target → Site map organizes it per host. Reviewing history after browsing reveals patterns you missed live.
+
+### Request modification — the core skill
+
+The point of Burp is not the tools; it is that **you control the request**. Practical things to modify and why:
+
+| What you modify | Why you do it | Example |
+|---|---|---|
+| Parameter value | Test for injection / traversal / IDOR | `id=42` → `id=41` |
+| Parameter name | Discover hidden inputs | add `role=admin` |
+| Method | Test whether a protected path accepts others | `GET` → `PUT` |
+| Cookie | Test authorization | swap session to another user's |
+| Header | Test vhosts / auth bypass | `Host: portal.internal` |
+| Body format | Test API parsing | form → JSON |
+
+## Parameter testing methodology with Burp
+
+1. **Map parameters** — from history and [web enumeration](/guides/web/web-enumeration).
+2. **Baseline** — send the original request; note status, length, timing.
+3. **One change at a time** — alter a single value and compare against baseline.
+4. **Classify** — does the change alter the response? If yes, the parameter reaches logic (candidate for injection/traversal). If no, move on.
+5. **Automate** — when a parameter looks alive, Intruder it with a small targeted list before escalating.
+
+## Authentication testing with Burp
+
+- **Intruder on login** — small credential lists against a lab target; watch for the different response that indicates a successful login (different status, redirect, or length).
+- **Cookie modification** — after login, Repeater a request with an edited/removed cookie to see what the server enforces.
+- **History review** — check the login flow's `Set-Cookie` for `HttpOnly`, `Secure`, and `SameSite` (see [Authentication & Authorization](/guides/web/authentication-authorization)).
+
+## Common mistakes
+
+- **Never installing the CA / never handling HTTPS**, then testing blind.
+- **Leaving Intercept on** and wondering why everything hangs.
+- **Editing many fields at once** — you no longer know which change caused the effect.
+- **Not using scope** — history fills with noise and the test covers out-of-scope hosts.
+- **Fuzzing with huge wordlists first** — small, targeted lists find most lab findings faster.
+- **Forgetting to record the request that produced each finding** — evidence is half the job.
+
+## Related guides
+
+- [HTTP Requests & Responses](/guides/web/http-requests-responses) — what you are looking at in Burp.
+- [Web Enumeration](/guides/web/web-enumeration) — what to collect before the Burp loop begins.
+- [SQL Injection](/guides/web/sql-injection) — parameter testing's first big payoff.
+- [Web Exploitation Methodology](/guides/web/web-exploitation-methodology) — where Burp fits in the overall flow.

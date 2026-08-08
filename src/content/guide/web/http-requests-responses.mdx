@@ -1,0 +1,176 @@
+---
+title: HTTP Requests & Responses
+description: Learn to read HTTP traffic like an analyst — request lines, headers, cookies, parameters, bodies, status codes, redirects, and the subtle response differences that reveal application logic.
+section: web
+phase: 3
+order: 3
+difficulty: beginner
+draft: false
+tags: ['http', 'requests', 'responses', 'headers', 'cookies', 'burp']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## Why learn to read raw HTTP
+
+The browser hides almost everything: it follows redirects silently, stores cookies invisibly, and renders responses into a page. An attacker cannot afford that. Reading raw requests and responses is how you see **what was actually sent and returned** — and it is the foundation of the entire web phase. This guide teaches the anatomy and, more importantly, the differences between responses that look alike but mean different things.
+
+## The request, line by line
+
+<CodeBlock
+  lang="text"
+  title="A complete GET request"
+  code={`GET /products?id=42 HTTP/1.1
+Host: 10.10.10.42
+User-Agent: Mozilla/5.0
+Accept: text/html
+Cookie: PHPSESSID=abc123
+Connection: close
+`}
+/>
+
+- **Request line** — `METHOD path HTTP/version`. This is the verb + target. Everything else is metadata.
+- **`Host`** — which site (crucial for vhosts).
+- **`Cookie`** — your session token.
+- **Remaining headers** — client capabilities and preferences.
+
+### The POST body
+
+When data must be sent, it goes after a blank line in the **body**:
+
+<CodeBlock
+  lang="text"
+  title="A POST with form data"
+  code={`POST /login HTTP/1.1
+Host: 10.10.10.42
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 28
+
+username=admin&password=test
+`}
+/>
+
+<SourceTag source="practical" /> In Burp, the tabbed view splits headers and body for you, but you must still read both. A parameter that exists only in the body is easy to miss when you are only looking at the URL.
+
+## The response, line by line
+
+<CodeBlock
+  lang="text"
+  title="A complete response"
+  code={`HTTP/1.1 200 OK
+Server: nginx/1.18.0
+Date: Sat, 08 Aug 2026 10:00:00 GMT
+Content-Type: text/html; charset=UTF-8
+Set-Cookie: PHPSESSID=xyz789; path=/; HttpOnly
+Content-Length: 4521
+
+<html><head>...</head><body>...</body></html>
+`}
+/>
+
+- **Status line** — version + code + reason.
+- **Response headers** — server info, content type, cookies set, and security headers.
+- **Body** — the resource: HTML, JSON, or a redirect target page.
+
+## Redirects: reading between the lines
+
+A `3xx` response tells the client where to go next via the `Location` header. What matters to you is **which** redirect happened and **when**:
+
+<CodeBlock
+  lang="bash"
+  title="See redirects instead of following them"
+  code={`curl -i http://10.10.10.42/                    # follow the chain? no, show each hop
+curl -L -i http://10.10.10.42/                  # follow redirects manually
+curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' http://10.10.10.42/login
+`}
+/>
+
+Redirect signals worth noting:
+
+- `302 Found` after login → the session was established; check the cookie.
+- `301 Moved Permanently` on an API → the endpoint moved; the old one may still work.
+- **Different redirect for `/admin` when logged in vs logged out** → an access-control lead.
+
+<Alert variant="info" title="Redirects are logic">
+  A redirect to a login page is not "the end" of a test — it is the start. It tells you authentication exists, and often reveals paths (e.g., `/login?next=/admin`) that leak where you are being sent.
+</Alert>
+
+## Authentication cookies and session handling
+
+When a site uses cookies for sessions, the cookie lifecycle tells a story:
+
+<CodeBlock
+  lang="text"
+  title="Login flow from the raw view"
+  code={`POST /login HTTP/1.1          <- credentials sent
+...
+HTTP/1.1 302 Found
+Set-Cookie: PHPSESSID=xyz789; path=/; HttpOnly
+Location: /dashboard
+
+GET /dashboard HTTP/1.1
+Cookie: PHPSESSID=xyz789        <- session token presented
+...
+HTTP/1.1 200 OK
+`}
+/>
+
+Things to check in this flow:
+
+- Is a cookie set **before** login too? Compare the pre-login and post-login IDs (session fixation).
+- Does the cookie change, or stay identical, after logout?
+- Is `HttpOnly` present? If not, an XSS can steal it.
+- Is `Secure` present? If not, the cookie can ride over plain HTTP.
+
+## Interesting response differences
+
+The most valuable skill in this guide: **notice when two responses differ**. The application is revealing something each time:
+
+| Difference to look for | What it usually means |
+|---|---|
+| Different status code for the same path (200 vs 403) | Role/authorization logic |
+| Different length for two users' pages | Different content per user — IDOR/access-control lead |
+| Error message changes per input | You are reaching different code paths (see [SQL Injection](/guides/web/sql-injection)) |
+| Timing differs for same-size responses | Possible time-based logic/blind injection |
+| Redirect target changes | Authentication or authorization decision |
+| Header changes (e.g., `X-Powered-By` appears/disappears) | Different backend handling your request |
+
+## Practical workflow for inspecting traffic
+
+1. **Capture** — browse the whole app through Burp (see [Burp Suite Methodology](/guides/web/burp-suite-methodology)); let it build HTTP history.
+2. **Filter** — sort by host, then by status; read the interesting entries (non-200, POSTs, API calls).
+3. **Replay** — send a request to Repeater and modify one variable at a time; compare responses.
+4. **Note** — record anything that differs, with the request that caused it.
+
+<CodeBlock
+  lang="bash"
+  title="Quick raw inspection without Burp"
+  code={`# See the full exchange, headers and body
+curl -i http://10.10.10.42/products/42
+
+# Only the status line and headers
+curl -s -I http://10.10.10.42/products/42
+
+# Show the response body only
+curl -s http://10.10.10.42/products/42
+`}
+/>
+
+## Common mistakes
+
+- **Letting the browser follow redirects silently** and never seeing the `Location` logic.
+- **Testing the URL only** and ignoring POST bodies and JSON payloads.
+- **Comparing responses without a baseline** — differences only mean something against a known-good request.
+- **Ignoring cookie attributes** at login.
+- **Not noticing when an identical request returns a different length** — that is often the finding.
+
+## Related guides
+
+- [Web Fundamentals](/guides/web/web-fundamentals) — the concepts behind each field.
+- [Burp Suite Methodology](/guides/web/burp-suite-methodology) — the tool for capturing and modifying these requests.
+- [Web Enumeration](/guides/web/web-enumeration) — what to collect before deep request analysis.
+- [SQL Injection](/guides/web/sql-injection) — the first place "interesting response differences" pay off.

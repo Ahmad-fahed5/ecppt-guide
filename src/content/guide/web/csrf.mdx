@@ -1,0 +1,125 @@
+---
+title: CSRF
+description: Cross-Site Request Forgery — the preconditions, state-changing requests, CSRF tokens, SameSite cookies, testing methodology, and the mistakes to avoid.
+section: web
+phase: 3
+order: 11
+difficulty: beginner
+draft: false
+tags: ['csrf', 'cross-site-request-forgery', 'tokens', 'samesite', 'state-changing']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## What CSRF is
+
+Cross-Site Request Forgery (CSRF) tricks a logged-in victim's browser into **sending a state-changing request to a site the victim trusts** — using the victim's own session. The attacker never sees the response and never needs the credentials; the browser carries the session cookie automatically.
+
+<CodeBlock
+  lang="text"
+  title="The attack shape"
+  code={`Victim (logged in to app.com)
+        |
+  visits attacker's page
+        |
+  attacker page auto-submits:  <img src="http://app.com/change-password?pass=hacked">
+        |
+  browser includes app.com cookie (if conditions allow)
+        |
+  server performs the action as the victim
+`}
+/>
+
+## Preconditions
+
+A CSRF attack needs:
+
+1. A **state-changing** action (change password, transfer, delete, change email) that runs on a GET or a form POST.
+2. No unpredictable **CSRF token** (or a token the attacker can predict/omit).
+3. Cookies that the browser will send cross-site (`SameSite=None` or legacy behaviour), or no cookie-based auth at all.
+4. No strict `Origin`/`Referer` validation.
+
+Remove any one, and the attack fails.
+
+## State-changing requests
+
+CSRF only matters for actions that change state. Reading your own profile is harmless; changing your password is not. The test starts by listing every state-changing request in the app and checking what protects it.
+
+## CSRF tokens
+
+The standard defense is a secret, per-session token embedded in forms. Testing it:
+
+- Is the token **present** on every state-changing form?
+- Is it **validated server-side** (not just rendered)?
+- Is it **unpredictable** (changing per request/session)?
+- Is it **bound to the session** (reusing another user's token fails)?
+
+<CodeBlock
+  lang="text"
+  title="CSRF token in a form"
+  code={`<form method="POST" action="/change-password">
+  <input type="hidden" name="csrf" value="a9f2...">
+  ...
+</form>
+`}
+/>
+
+## SameSite cookies
+
+The modern browser default, `SameSite=Lax`, stops most CSRF for top-level navigations and cross-site POSTs. What to note:
+
+| Attribute | Effect on CSRF |
+|---|---|
+| `SameSite=Lax` (default) | Blocks most cross-site POST; still allows some top-level GET navigations |
+| `SameSite=Strict` | Blocks cross-site cookies almost entirely |
+| `SameSite=None` | No protection — the cookie is sent cross-site |
+| `Secure` | Only over HTTPS (required with `SameSite=None`) |
+
+<SourceTag source="practical" /> Check the login `Set-Cookie`. A `SameSite=None` session cookie in a modern browser is a CSRF enabler by itself — a finding even before you build a proof.
+
+## Testing methodology
+
+1. **List state-changing actions** — password change, email change, profile update, delete, transfer.
+2. **Check each form** — is there a CSRF token? Is it validated?
+3. **Confirm by replay** — submit the action from a different origin (a local HTML page or a crafted request) without the token; if it succeeds, CSRF exists.
+4. **Check cookie flags** — `SameSite` and `Secure` on the session cookie.
+5. **Record the proof** — the action performed without the token, with the request captured.
+
+<CodeBlock
+  lang="text"
+  title="Conceptual proof (lab)"
+  code={`<!-- hosted somewhere else than app.com -->
+<form action="http://10.10.10.42/change-password" method="POST">
+  <input name="password" value="hacked123">
+  <input type="submit">
+</form>
+<script>document.forms[0].submit();</script>
+`}
+/>
+
+- **Purpose:** demonstrate the action fires with the victim's session, from a different origin.
+- **Expected result:** the password changes although the attacker never saw the victim's cookie.
+- **Investigate next:** document the action and the missing control; tie impact to what the action allows.
+
+<Alert variant="danger" title="Lab-only proofs">
+  Never run state-changing CSRF proofs against real systems without explicit authorization. Use your own lab accounts for every demonstration.
+</Alert>
+
+## Common mistakes
+
+- **Claiming CSRF on a GET** that the app protects differently — GETs with side effects are still bad, but CSRF impact needs the token/`SameSite` analysis too.
+- **Forgetting `SameSite=None`** — modern browsers block much CSRF by default; note when a site *chooses* to disable it.
+- **Testing only login forms** — password change, profile, and API actions matter more.
+- **Ignoring the token's randomness** — a static or per-request-predictable token is still a bypass.
+- **Assuming a token on the page means protection** — the server must actually validate it.
+
+## Related guides
+
+- [Web Fundamentals](/guides/web/web-fundamentals) — cookies and `Set-Cookie` flags.
+- [HTTP Requests & Responses](/guides/web/http-requests-responses) — reading the login flow's cookie headers.
+- [Cross-Site Scripting](/guides/web/cross-site-scripting) — XSS and CSRF often combine into one real chain.
+- [Authentication & Authorization](/guides/web/authentication-authorization) — session and cookie context.

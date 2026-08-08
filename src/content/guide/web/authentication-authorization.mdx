@@ -1,0 +1,141 @@
+---
+title: Authentication & Authorization
+description: Practical testing of login functionality, sessions, cookies, password handling, and access control — including IDOR, and horizontal and vertical privilege escalation.
+section: web
+phase: 3
+order: 5
+difficulty: intermediate
+draft: false
+tags: ['authentication', 'authorization', 'idor', 'sessions', 'cookies', 'access-control']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## Authentication vs authorization
+
+- **Authentication** — proving *who you are* (login, session, credentials).
+- **Authorization** — determining *what you may do* once identified (roles, permissions, access control).
+
+<SourceTag source="practical" /> These are tested separately. A site with rock-solid authentication can still leak data through broken authorization — and authorization bugs (IDOR, privilege escalation) are common in lab environments because they take thinking, not just automation.
+
+## Login functionality
+
+Test the login screen itself:
+
+- **Username enumeration** — does the error differ for a valid vs invalid username ("unknown user" vs "wrong password")? If yes, you can enumerate accounts.
+- **Default/weak credentials** — try obvious pairs (`admin:admin`) **only in authorized labs**; note the practice, not just the result.
+- **Rate limiting / lockout** — can you send many attempts? Absence of throttling is itself a finding.
+- **Password handling** — is the password sent over HTTPS? Is it visible in history? (It will be in plaintext in Burp history — that is expected for testing; what matters is whether the *site* allows it.)
+
+## Session handling
+
+The session is what the server believes about you after login. Test it like this:
+
+- **Cookie before vs after login** — if the ID is identical, the session was not regenerated (fixation-prone).
+- **Cookie attributes** — `HttpOnly` (XSS cannot read it), `Secure` (only HTTPS), `SameSite` (CSRF relevance).
+- **Logout** — does the server actually invalidate the session, or does the old cookie still work?
+- **Session expiry** — how long does a session survive unused?
+- **Session ID randomness** — log in repeatedly; are IDs guessable/predictable?
+
+<CodeBlock
+  lang="text"
+  title="Cookie flags to read at login"
+  code={`Set-Cookie: PHPSESSID=abc123; path=/
+   ^ missing HttpOnly -> XSS can steal it
+   ^ missing Secure   -> can travel over HTTP
+   ^ missing SameSite -> more CSRF surface
+`}
+/>
+
+## Password-related concepts
+
+- **Stored hashed or plaintext?** A response or a DB leak in a lab can reveal how passwords are stored — plaintext is a critical finding.
+- **Encrypted vs hashed** — hashed is normal; reversible encryption of passwords is a finding.
+- **Password reset** — predictable tokens, user-controlled reset, or reset that reveals whether an account exists.
+
+## Authorization: the two escalations
+
+### Horizontal privilege escalation
+
+Accessing **another user's data at the same privilege level**:
+
+- `GET /profile?id=42` where your id is 41 → change to 42 → see another user's profile.
+- Log in as two accounts in the lab and cross the data.
+
+### Vertical privilege escalation
+
+Accessing **higher privilege functions**:
+
+- Changing a parameter like `role=user` → `role=admin`.
+- Requesting admin URLs directly without the UI (`GET /admin` while logged in as a normal user).
+- Changing the method or removing the cookie to see what the server actually enforces.
+
+## IDOR (Insecure Direct Object Reference)
+
+IDOR is the most common authorization bug you will find: the application trusts an identifier you supply and never checks ownership.
+
+<CodeBlock
+  lang="text"
+  title="Classic IDOR"
+  code={`GET /invoice/156  -> 200, invoice for user 4
+GET /invoice/155  -> 200, invoice for user 3   <- same login
+=> no ownership check: horizontal escalation
+`}
+/>
+
+Testing methodology:
+
+1. **Find object references** — ids in URLs, bodies, or API JSON (`id`, `uid`, `invoice`, `file`).
+2. **Baseline** — request your own object; note status and body.
+3. **Increment/decrement** — request neighboring ids.
+4. **Compare** — a `200` with different content than your own = the server did not check ownership.
+5. **Automate the sweep** — Intruder over the id range (see [Burp Suite Methodology](/guides/web/burp-suite-methodology)), sort by length.
+
+## Access-control testing methodology
+
+A repeatable sequence for any protected function:
+
+1. **Authenticate as a normal user** and map what they can reach.
+2. **Authenticate as an admin** (lab credentials) and note the admin URLs.
+3. **Replay admin URLs as the normal user** — direct navigation bypasses the UI.
+4. **Replay with the cookie removed** — is the endpoint actually protected, or just hidden?
+5. **Replay with a second normal user's cookie** — horizontal checks.
+6. **Record** — every 200 where a 403 should have been is a finding.
+
+<CodeBlock
+  lang="bash"
+  title="Quick manual checks with curl (authorized lab)"
+  code={`# Direct access as normal user (cookie = user cookie)
+curl -b 'PHPSESSID=USER_SESSION' http://10.10.10.42/admin
+
+# Admin endpoint without any session
+curl -i http://10.10.10.42/admin
+
+# Object reference with another user's id
+curl -b 'PHPSESSID=USER_SESSION' http://10.10.10.42/api/user/41
+`}
+/>
+
+<Alert variant="danger" title="Stay in scope">
+  Object-reference testing means touching other users' data. That is exactly what an authorized lab or CTF is for. On a real engagement, confirm the scope and rules of engagement cover this testing before sweeping ids.
+</Alert>
+
+## Common mistakes
+
+- **Only testing authentication** (login bypass) and never authorization.
+- **Trusting the UI** — the hidden admin button does not protect `/admin`; direct requests do.
+- **Assuming a 404 means no access** — a 200, 301, or 403 all tell different stories.
+- **Testing only your own objects** — horizontal testing needs a second account.
+- **Ignoring cookie attributes** and missing session-hardening findings.
+- **Forgetting that a missing rate limit is a finding**, not a tool limitation.
+
+## Related guides
+
+- [HTTP Requests & Responses](/guides/web/http-requests-responses) — reading the cookie and redirect signals these tests rely on.
+- [Burp Suite Methodology](/guides/web/burp-suite-methodology) — Repeater/Intruder for the object-reference sweep.
+- [Web Exploitation Methodology](/guides/web/web-exploitation-methodology) — where auth findings fit in the flow.
+- [SQL Injection](/guides/web/sql-injection) — authentication bypass is also reached through injection.

