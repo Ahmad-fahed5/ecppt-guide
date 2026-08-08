@@ -1,0 +1,18 @@
+---
+import Badge from '../ui/Badge.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  badge?: string;
+  badgeVariant?: 'neutral' | 'green' | 'cyan' | 'violet' | 'amber' | 'rose';
+}
+
+const { title, description, badge, badgeVariant = 'green' } = Astro.props;
+---
+
+<header class="page-header">
+  {badge && <Badge variant={badgeVariant}>{badge}</Badge>}
+  <h1>{title}</h1>
+  {description && <p>{description}</p>}
+</header>

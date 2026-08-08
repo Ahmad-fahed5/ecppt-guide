@@ -1,0 +1,65 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/layout/PageHeader.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Icon from '../../components/ui/Icon.astro';
+import Alert from '../../components/ui/Alert.astro';
+
+const categories = [
+  {
+    name: 'Reconnaissance',
+    description: 'DNS, subdomain, and asset discovery tooling.',
+  },
+  {
+    name: 'Scanning',
+    description: 'Port scanning, fingerprinting, and service enumeration.',
+  },
+  {
+    name: 'Web',
+    description: 'Web application fuzzing, proxies, and exploitation helpers.',
+  },
+  {
+    name: 'Credential Handling',
+    description: 'Password cracking, hash identification, and wordlists.',
+  },
+  {
+    name: 'Post-Exploitation',
+    description: 'Pivoting, tunneling, and lateral movement utilities.',
+  },
+  {
+    name: 'Reporting',
+    description: 'Evidence capture, note-taking, and report generation.',
+  },
+];
+---
+
+<BaseLayout
+  title="Toolbox"
+  description="Reference for tools, commands, and quick lookups."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Toolbox' }]} />
+  <PageHeader
+    title="Toolbox"
+    description="A quick reference for tools, commands, and common lookups — organized by task."
+    badge="Reference"
+  />
+
+  <div class="grid grid--tools">
+    {categories.map((category) => (
+      <article class="card card--cyan">
+        <span class="card-icon">
+          <Icon name="wrench" size={22} />
+        </span>
+        <div class="card-body">
+          <h3 class="card-title">{category.name}</h3>
+          <p class="card-text">{category.description}</p>
+        </div>
+      </article>
+    ))}
+  </div>
+
+  <Alert variant="info" title="Content pending">
+    Tool cheat sheets, command references, and usage notes will be added here in
+    the content phase.
+  </Alert>
+</BaseLayout>

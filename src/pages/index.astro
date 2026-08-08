@@ -1,0 +1,380 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Icon from '../components/ui/Icon.astro';
+import Alert from '../components/ui/Alert.astro';
+import SourceTag from '../components/ui/SourceTag.astro';
+import OfficialVerification from '../components/ui/OfficialVerification.astro';
+import { kbSections } from '../config/knowledgeBase';
+import { roadmapPhases } from '../config/roadmap';
+import { getCollection } from 'astro:content';
+
+const guides = await getCollection('guide');
+const published = guides.filter((guide) => !guide.data.draft);
+
+const audience = [
+  {
+    title: 'Aspiring penetration testers',
+    text: 'People building the practical skills needed to start a career in offensive security.',
+    icon: 'target',
+  },
+  {
+    title: 'IT and security professionals',
+    text: 'Professionals moving from defensive roles toward offensive testing and assessments.',
+    icon: 'shield',
+  },
+  {
+    title: 'Students and career changers',
+    text: 'Learners who want a structured, hands-on path instead of scattered tutorials.',
+    icon: 'book-open',
+  },
+  {
+    title: 'Red-team-curious operators',
+    text: 'Anyone who wants to understand how networks and applications fail in practice.',
+    icon: 'zap',
+  },
+];
+
+const skills = [
+  'Network security analysis',
+  'Web application testing',
+  'Exploitation and post-exploitation',
+  'Privilege escalation',
+  'Active Directory and lateral movement',
+  'Pivoting and tunneling',
+  'Methodology and reporting',
+];
+
+const methodologyPoints = [
+  {
+    title: 'Repeatable',
+    text: 'A defined process produces the same results regardless of who runs it — and lets you reproduce findings.',
+    icon: 'refresh-cw',
+  },
+  {
+    title: 'Complete',
+    text: 'A checklist-driven methodology stops you from skipping quiet services, hidden subnets, or unenumerated ports.',
+    icon: 'clipboard-check',
+  },
+  {
+    title: 'Communicable',
+    text: 'When every step is methodical, your notes and report write themselves from a clear trail of evidence.',
+    icon: 'file',
+  },
+];
+
+const valuePoints = [
+  'Recognized by many cybersecurity professionals as a practical, hands-on credential.',
+  'The assessment-style environment rewards methodical work over memorization.',
+  'Prepares you to operate in real, authorized engagements.',
+  'Provides a structured path to build broad penetration-testing skills.',
+];
+
+const areas = [
+  { title: 'Knowledge Base', href: '/guides', icon: 'book-open', text: 'Structured guides across every core domain.', accent: 'card--green' },
+  { title: 'Roadmap', href: '/roadmap', icon: 'route', text: 'The full learning path, phase by phase.', accent: 'card--cyan' },
+  { title: 'Methodology', href: '/methodology', icon: 'compass', text: 'How to think during an assessment.', accent: 'card--violet' },
+  { title: 'Toolbox', href: '/toolbox', icon: 'wrench', text: 'Searchable reference for tools and commands.', accent: 'card--amber' },
+  { title: 'Playbooks', href: '/playbooks', icon: 'clipboard-check', text: 'Step-by-step assessment playbooks.', accent: 'card--rose' },
+  { title: 'Cheat Sheets', href: '/cheat-sheets', icon: 'grid', text: 'Categorized, searchable command references.', accent: 'card--green' },
+  { title: 'Exam Preparation', href: '/exam-prep', icon: 'graduation-cap', text: 'Revision plans, strategy, and readiness.', accent: 'card--cyan' },
+  { title: 'Practical Insights', href: '/insights', icon: 'lightbulb', text: 'Community considerations, clearly labeled.', accent: 'card--amber' },
+];
+---
+
+<BaseLayout
+  title="Dashboard"
+  description="ECPPTv3 Ultimate Guide — a practical learning and preparation platform for eCPPTv3."
+>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-eyebrow">
+      <span class="prompt-sign">~/</span> ecppt-guide $ <span class="prompt-sign">./begin</span>
+    </div>
+    <h1>Learn penetration testing the way it is actually performed.</h1>
+    <p class="hero-lede">
+      <strong style="color: var(--text-1);">ECPPTv3 Ultimate Guide.</strong> A
+      practical learning and preparation platform for eCPPTv3 — combining a
+      structured knowledge base, field-tested methodology, playbooks, cheat
+      sheets, and progress tracking, built for authorized labs and serious exam
+      preparation.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn--primary" href="/roadmap">
+        Start the roadmap
+        <Icon name="arrow-right" size={16} />
+      </a>
+      <a class="btn btn--ghost" href="/guides">Browse the knowledge base</a>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <div class="stats" aria-label="Platform statistics">
+    <div class="stat">
+      <p class="stat-value">{roadmapPhases.length}</p>
+      <p class="stat-label">Roadmap phases</p>
+    </div>
+    <div class="stat">
+      <p class="stat-value">{kbSections.length}</p>
+      <p class="stat-label">Knowledge base sections</p>
+    </div>
+    <div class="stat">
+      <p class="stat-value">{guides.length}</p>
+      <p class="stat-label">Guides</p>
+    </div>
+    <div class="stat">
+      <p class="stat-value">{published.length}</p>
+      <p class="stat-label">Published</p>
+    </div>
+  </div>
+
+  <!-- What is eCPPTv3 -->
+  <section class="home-section">
+    <div class="home-section-head">
+      <p class="section-kicker">About the certification</p>
+      <h2>What is eCPPTv3?</h2>
+    </div>
+    <div class="split">
+      <div>
+        <p class="prose-p">
+          <SourceTag source="official" />
+          &nbsp;eCPPT (eLearnSecurity Certified Professional Penetration Tester) is a
+          penetration testing certification offered by <strong>INE</strong>, the
+          company behind the eLearnSecurity program. In this guide we refer to the
+          current program iteration as <strong>eCPPTv3</strong>.
+        </p>
+        <p class="prose-p">
+          <SourceTag source="practical" />
+          &nbsp;The certification is widely understood by the community to be a
+          practical, hands-on assessment that tests applied penetration testing
+          methodology rather than pure theory. This guide is built around the
+          practical skills that assessments like this reward: thorough
+          enumeration, disciplined methodology, and clear documentation.
+        </p>
+        <OfficialVerification
+          what="Official program details such as exam duration, format, prerequisites, objectives, and weights are published by INE. They were not available from an authoritative source at the time this page was written, so we do not state them here."
+        />
+      </div>
+      <div class="stack">
+        <div class="official-panel">
+          <h3>
+            <Icon name="shield" size={16} />
+            Official information
+          </h3>
+          <p>
+            Information published by INE is marked with this panel and the
+            <em> Official </em> tag across the platform.
+          </p>
+        </div>
+        <div class="official-panel" style="border-color:rgba(53,230,155,.3);background:linear-gradient(180deg,var(--accent-soft),transparent 70%),var(--surface);">
+          <h3 style="color:var(--accent);">
+            <Icon name="compass" size={16} />
+            Practical guidance
+          </h3>
+          <p>
+            Everything else — techniques, commands, methodology, and workflows —
+            is our educational guidance based on penetration testing practice.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Who it is for + skills -->
+  <section class="home-section">
+    <div class="home-section-head">
+      <p class="section-kicker">Audience</p>
+      <h2>Who is it for?</h2>
+      <p class="home-section-lede">
+        The platform is designed for learners who want to work through a real
+        penetration testing curriculum with their hands on a keyboard.
+      </p>
+    </div>
+    <div class="grid grid--tools">
+      {audience.map((item) => (
+        <article class="card card--cyan">
+          <span class="card-icon">
+            <Icon name={item.icon} size={22} />
+          </span>
+          <div class="card-body">
+            <h3 class="card-title">{item.title}</h3>
+            <p class="card-text">{item.text}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+
+    <div class="home-section" style="margin-top:40px;">
+      <div class="home-section-head">
+        <p class="section-kicker">Skills developed</p>
+        <h2>What skills does it develop?</h2>
+      </div>
+      <div class="chip-row">
+        {skills.map((skill) => (
+          <span class="chip chip--accent">{skill}</span>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Why methodology matters -->
+  <section class="home-section">
+    <div class="home-section-head">
+      <p class="section-kicker">Approach</p>
+      <h2>Why penetration testing methodology matters</h2>
+      <p class="home-section-lede">
+        Certifications reward results, but results come from process. The
+        difference between finding a shell and missing it is usually an
+        enumeration step that was skipped.
+      </p>
+    </div>
+    <div class="grid grid--sections">
+      {methodologyPoints.map((point) => (
+        <article class="card card--green">
+          <span class="card-icon">
+            <Icon name={point.icon} size={22} />
+          </span>
+          <div class="card-body">
+            <h3 class="card-title">{point.title}</h3>
+            <p class="card-text">{point.text}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <!-- Why valuable -->
+  <section class="home-section">
+    <div class="home-section-head">
+      <p class="section-kicker">Career perspective</p>
+      <h2>Why the certification can be valuable</h2>
+      <p class="home-section-lede">
+        We keep this strictly factual. No salary claims, no rankings — just what
+        the credential is commonly understood to provide.
+      </p>
+    </div>
+    <div class="split">
+      <ul class="feature-list">
+        {valuePoints.map((point) => (
+          <li>
+            <span class="feature-icon">
+              <Icon name="check" size={16} />
+            </span>
+            {point}
+          </li>
+        ))}
+      </ul>
+      <Alert variant="info" title="Our position">
+        <p>
+          We do not make claims about market value, salaries, or hiring outcomes.
+          A certification is one part of a career — the skills you can actually
+          demonstrate matter most. Evaluate any credential against your own
+          goals.
+        </p>
+      </Alert>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="home-section">
+    <div class="home-section-head">
+      <p class="section-kicker">Cost</p>
+      <h2>Certification & training pricing</h2>
+    </div>
+    <div class="official-panel">
+      <h3>
+        <Icon name="award" size={16} />
+        Official pricing and training details
+      </h3>
+      <p>
+        Certification, exam, and training pricing are set by INE and change over
+        time. At the time this page was written, current official figures were
+        not available from an authoritative source available to this project.
+      </p>
+      <div style="margin-top:14px;">
+        <OfficialVerification
+          what="Exact certification, exam, and training prices are published by INE on their official platform. Verify the current pricing before purchasing."
+        />
+      </div>
+      <p style="margin-top:14px;font-size:13.5px;color:var(--text-2);">
+        <SourceTag source="practical" />
+        &nbsp;Check whether official training bundles include the exam, whether
+        the lab environment is provided, and what the retake policy is before
+        spending money. None of these details are assumed here.
+      </p>
+    </div>
+  </section>
+
+  <!-- Learning areas -->
+  <section class="home-section">
+    <div class="home-section-head">
+      <p class="section-kicker">Navigate</p>
+      <h2>Explore the platform</h2>
+      <p class="home-section-lede">
+        Every major learning area, one click away.
+      </p>
+    </div>
+    <div class="grid grid--tools">
+      {areas.map((area) => (
+        <a class={`card ${area.accent}`} href={area.href}>
+          <span class="card-icon">
+            <Icon name={area.icon} size={22} />
+          </span>
+          <div class="card-body">
+            <h3 class="card-title">{area.title}</h3>
+            <p class="card-text">{area.text}</p>
+          </div>
+          <p class="card-meta">
+            Open
+            <Icon name="arrow-right" size={14} />
+          </p>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <!-- Info types legend -->
+  <section class="home-section">
+    <div class="home-section-head">
+      <p class="section-kicker">Trust markers</p>
+      <h2>How information is labeled</h2>
+      <p class="home-section-lede">
+        To keep official facts separate from our advice, every page uses these
+        markers. If you see an official tag, the fact comes from INE. If you see
+        a verification block, we could not confirm the detail and chose not to
+        guess.
+      </p>
+    </div>
+    <div class="legend">
+      <span class="legend-item">
+        <SourceTag source="official" /> Published by INE.
+      </span>
+      <span class="legend-item">
+        <SourceTag source="practical" /> Our educational recommendations.
+      </span>
+      <span class="legend-item">
+        <SourceTag source="community" /> Non-official community observations.
+      </span>
+    </div>
+  </section>
+
+  <!-- Footer CTA -->
+  <section class="home-section">
+    <div class="panel" style="border-style:solid;">
+      <p class="panel-title">
+        <Icon name="route" size={16} />
+        Not sure where to start?
+      </p>
+      <p class="panel-text">
+        The roadmap takes you from foundations to exam readiness in fifteen
+        phases, each with an objective, key tools, a completion checklist, and
+        links to the guides you need.
+      </p>
+      <div style="margin-top:16px;">
+        <a class="btn btn--primary" href="/roadmap">
+          Open the roadmap
+          <Icon name="arrow-right" size={16} />
+        </a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>

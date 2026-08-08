@@ -1,0 +1,32 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import UnderConstruction from '../../components/layout/UnderConstruction.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Alert from '../../components/ui/Alert.astro';
+---
+
+<BaseLayout
+  title="My Notes"
+  description="Personal notes stored locally in your browser."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'My Notes' }]} />
+  <UnderConstruction
+    badge="Personal"
+    icon="pen"
+    title="My Notes"
+    description="Create, edit, delete, organize, and search personal notes. Associate them with topics, mark important ones, and return to them later."
+    planned={[
+      'Create and edit notes',
+      'Delete and organize notes',
+      'Associate notes with topics',
+      'Search and pin important notes',
+    ]}
+  />
+  <Alert variant="warning" title="Privacy first">
+    <p>
+      In this version, your notes are stored <strong>locally in your browser</strong>.
+      No account, no server, no upload. Clear your browser data and your notes go
+      with it.
+    </p>
+  </Alert>
+</BaseLayout>

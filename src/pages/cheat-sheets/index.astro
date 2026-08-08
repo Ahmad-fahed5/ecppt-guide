@@ -1,0 +1,33 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import UnderConstruction from '../../components/layout/UnderConstruction.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+---
+
+<BaseLayout
+  title="Cheat Sheets"
+  description="Categorized, searchable command references with copy buttons."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Cheat Sheets' }]} />
+  <UnderConstruction
+    badge="Reference"
+    icon="grid"
+    title="Cheat Sheets"
+    description="A comprehensive, categorized command reference covering Nmap, enumeration, Linux, Windows, PowerShell, web, Metasploit, SMB, Active Directory, credential attacks, privilege escalation, pivoting, port forwarding, and post-exploitation."
+    planned={[
+      'Nmap',
+      'Enumeration',
+      'Linux',
+      'Windows',
+      'PowerShell',
+      'Web',
+      'Metasploit',
+      'SMB',
+      'Active Directory',
+      'Credential attacks',
+      'Privilege escalation',
+      'Pivoting & port forwarding',
+      'Post-exploitation',
+    ]}
+  />
+</BaseLayout>

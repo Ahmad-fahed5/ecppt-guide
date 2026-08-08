@@ -1,0 +1,45 @@
+---
+interface Props {
+  target: string;
+  label?: string;
+}
+
+const { target, label = 'Copy' } = Astro.props;
+---
+
+<button
+  class="copy-btn"
+  type="button"
+  data-copy-target={target}
+  aria-label="Copy to clipboard"
+>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </svg>
+  <span>{label}</span>
+</button>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-copy-target]').forEach((btn) => {
+    const reset = () => {
+      btn.classList.remove('is-copied');
+      const label = btn.querySelector('span');
+      if (label) label.textContent = 'Copy';
+    };
+
+    btn.addEventListener('click', async () => {
+      const el = document.getElementById(btn.dataset.copyTarget ?? '');
+      if (!el) return;
+      try {
+        await navigator.clipboard.writeText(el.textContent ?? '');
+        btn.classList.add('is-copied');
+        const label = btn.querySelector('span');
+        if (label) label.textContent = 'Copied';
+        window.setTimeout(reset, 1600);
+      } catch {
+        reset();
+      }
+    });
+  });
+</script>

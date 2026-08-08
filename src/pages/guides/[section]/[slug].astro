@@ -1,0 +1,102 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Breadcrumbs from '../../../components/ui/Breadcrumbs.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import Icon from '../../../components/ui/Icon.astro';
+import { kbSectionLabel } from '../../../config/knowledgeBase';
+import { roadmapPhases } from '../../../config/roadmap';
+import { difficultyLabels, difficultyBadge } from '../../../config/guideMeta';
+import { getCollection, render } from 'astro:content';
+
+export async function getStaticPaths() {
+  const guides = await getCollection('guide');
+  return guides.map((guide) => {
+    const [section, ...rest] = guide.id.split('/');
+    return {
+      params: { section, slug: rest.join('/') },
+      props: { guide },
+    };
+  });
+}
+
+const { guide } = Astro.props;
+const { Content, headings } = await render(guide);
+const section = guide.data.section;
+const phase = roadmapPhases.find((p) => p.number === guide.data.phase);
+const tocHeadings = headings.filter((heading) => heading.depth >= 2 && heading.depth <= 3);
+---
+
+<BaseLayout
+  title={guide.data.title}
+  description={guide.data.description || undefined}
+>
+  <Breadcrumbs
+    items={[
+      { label: 'Home', href: '/' },
+      { label: 'Knowledge Base', href: '/guides' },
+      { label: kbSectionLabel(section), href: `/guides/${section}` },
+      { label: guide.data.title },
+    ]}
+  />
+
+  <div class="page-layout">
+    <article class="prose">
+      <h1>{guide.data.title}</h1>
+      <div class="article-meta">
+        <Badge variant="cyan">{kbSectionLabel(section)}</Badge>
+        <Badge variant={difficultyBadge(guide.data.difficulty)}>
+          {difficultyLabels[guide.data.difficulty]}
+        </Badge>
+        {phase && <Badge variant="green">Phase {guide.data.phase}</Badge>}
+        {guide.data.draft && <Badge variant="amber">Draft</Badge>}
+        {guide.data.updated && (
+          <span>Updated {guide.data.updated.toLocaleDateString()}</span>
+        )}
+      </div>
+
+      {guide.data.tags.length > 0 && (
+        <div class="chip-row" style="margin-bottom:20px;">
+          {guide.data.tags.map((tag) => (
+            <span class="chip">{tag}</span>
+          ))}
+        </div>
+      )}
+
+      <Content />
+    </article>
+
+    {tocHeadings.length > 0 && (
+      <aside class="toc" aria-label="On this page">
+        <p class="toc-title">On this page</p>
+        <ul>
+          {tocHeadings.map((heading) => (
+            <li>
+              <a
+                href={`#${heading.slug}`}
+                style={heading.depth === 3 ? { paddingLeft: '20px' } : undefined}
+              >
+                {heading.text}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    )}
+  </div>
+
+  {phase && (
+    <div class="phase-related" style="max-width:820px;margin-top:32px;">
+      <h3>Part of Phase {guide.data.phase}</h3>
+      <div class="phase-related-links">
+        <a class="related-link" href={`/roadmap#phase-${guide.data.phase}`}>
+          <Icon name="route" size={14} />
+          {phase.title}
+        </a>
+        <a class="related-link" href={`/guides/${section}`}>
+          <Icon name="book-open" size={14} />
+          All {kbSectionLabel(section)} guides
+        </a>
+      </div>
+    </div>
+  )}
+</BaseLayout>

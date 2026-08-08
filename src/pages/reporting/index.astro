@@ -1,0 +1,63 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/layout/PageHeader.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Icon from '../../components/ui/Icon.astro';
+import Alert from '../../components/ui/Alert.astro';
+import Checklist from '../../components/ui/Checklist.astro';
+import ProgressBar from '../../components/ui/ProgressBar.astro';
+---
+
+<BaseLayout
+  title="Reporting"
+  description="Turning findings into clear, professional deliverables."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Reporting' }]} />
+  <PageHeader
+    title="Reporting"
+    description="A professional report is the primary deliverable of any engagement. Guidance and templates are planned here."
+    badge="Deliverable"
+  />
+
+  <div class="grid grid--2">
+    <article class="card card--amber">
+      <span class="card-icon">
+        <Icon name="file" size={22} />
+      </span>
+      <div class="card-body">
+        <h3 class="card-title">Executive summary</h3>
+        <p class="card-text">Communicating risk to non-technical stakeholders.</p>
+      </div>
+    </article>
+    <article class="card card--rose">
+      <span class="card-icon">
+        <Icon name="clipboard" size={22} />
+      </span>
+      <div class="card-body">
+        <h3 class="card-title">Technical findings</h3>
+        <p class="card-text">Clear, reproducible write-ups with remediation guidance.</p>
+      </div>
+    </article>
+  </div>
+
+  <Alert variant="info" title="Content pending">
+    Report structure guidance, finding templates, and evidence best practices
+    will be added in the content phase.
+  </Alert>
+
+  <div style="max-width:560px;">
+    <ProgressBar value={2} max={5} label="Report sections drafted" tone="amber" />
+  </div>
+
+  <Checklist
+    id="report-check"
+    title="Report checklist"
+    items={[
+      'Summarize scope and objectives',
+      'Rate and order findings by severity',
+      'Include reproducible evidence for each finding',
+      'Provide clear remediation steps',
+      'Proofread for technical accuracy',
+    ]}
+  />
+</BaseLayout>

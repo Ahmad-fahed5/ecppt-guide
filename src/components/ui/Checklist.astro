@@ -1,0 +1,68 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  id: string;
+  title?: string;
+  items: string[];
+}
+
+const { id, title = 'Checklist', items } = Astro.props;
+---
+
+<section class="checklist" data-checklist-id={id}>
+  <header class="checklist-head">
+    <h3>
+      <Icon name="clipboard" size={16} />
+      {title}
+    </h3>
+    <button class="checklist-reset" type="button">Reset</button>
+  </header>
+  <ul class="checklist-list">
+    {items.map((item) => (
+      <li class="checklist-item">
+        <label>
+          <input type="checkbox" aria-label={item} />
+          <span class="checkbox-box" aria-hidden="true"></span>
+          <span class="checklist-text">{item}</span>
+        </label>
+      </li>
+    ))}
+  </ul>
+</section>
+
+<script>
+  const sections = document.querySelectorAll<HTMLElement>('[data-checklist-id]');
+  for (const section of sections) {
+    const id = section.dataset.checklistId ?? '';
+    const boxes = section.querySelectorAll<HTMLInputElement>('input[type="checkbox"]');
+    const key = `checklist:${id}`;
+
+    const read = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(key) ?? '[]') as string[];
+        boxes.forEach((box, index) => {
+          box.checked = saved.includes(String(index));
+        });
+      } catch {
+        /* ignore corrupted state */
+      }
+    };
+
+    const write = () => {
+      const checked = Array.from(boxes)
+        .map((box, index) => (box.checked ? String(index) : null))
+        .filter((v): v is string => v !== null);
+      localStorage.setItem(key, JSON.stringify(checked));
+    };
+
+    boxes.forEach((box) => box.addEventListener('change', write));
+
+    section.querySelector('.checklist-reset')?.addEventListener('click', () => {
+      boxes.forEach((box) => (box.checked = false));
+      write();
+    });
+
+    read();
+  }
+</script>

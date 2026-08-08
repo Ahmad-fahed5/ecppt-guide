@@ -1,0 +1,50 @@
+---
+import Icon from './Icon.astro';
+import Badge from './Badge.astro';
+
+interface Props {
+  title?: string;
+  href?: string;
+  accent?: 'default' | 'green' | 'cyan' | 'violet' | 'amber' | 'rose';
+  icon?: string;
+  tag?: string;
+  tagVariant?: 'neutral' | 'green' | 'cyan' | 'violet' | 'amber' | 'rose';
+  footer?: string;
+}
+
+const {
+  title,
+  href,
+  accent = 'default',
+  icon,
+  tag,
+  tagVariant = 'neutral',
+  footer,
+} = Astro.props;
+
+const Tag = href ? 'a' : 'article';
+const linkProps = href ? { href } : {};
+---
+
+<Tag
+  {...linkProps}
+  class:list={['card', `card--${accent}`, { 'card--clickable': href }]}
+>
+  {tag && (
+    <span class="card-tag">
+      <Badge variant={tagVariant}>{tag}</Badge>
+    </span>
+  )}
+  {icon && (
+    <span class="card-icon">
+      <Icon name={icon} size={22} />
+    </span>
+  )}
+  <div class="card-body">
+    {title && <h3 class="card-title">{title}</h3>}
+    <div class="card-text">
+      <slot />
+    </div>
+  </div>
+  {footer && <p class="card-meta">{footer}</p>}
+</Tag>

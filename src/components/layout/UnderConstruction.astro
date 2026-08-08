@@ -1,0 +1,45 @@
+---
+import PageHeader from './PageHeader.astro';
+import Alert from '../ui/Alert.astro';
+import Icon from '../ui/Icon.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  badge?: string;
+  planned?: string[];
+  icon?: string;
+}
+
+const { title, description, badge, planned = [], icon } = Astro.props;
+---
+
+<PageHeader title={title} description={description} badge={badge} />
+
+<div class="panel">
+  <p class="panel-title">
+    <Icon name={icon ?? 'help-circle'} size={16} />
+    This section is planned for an upcoming phase
+  </p>
+  <p class="panel-text">
+    The architecture and navigation are in place. The content and features for
+    this area will be built in a later phase of the project.
+  </p>
+</div>
+
+{planned.length > 0 && (
+  <div class="grid grid--tools">
+    {planned.map((item) => (
+      <article class="card">
+        <div class="card-body">
+          <h3 class="card-title">{item}</h3>
+        </div>
+      </article>
+    ))}
+  </div>
+)}
+
+<Alert variant="info" title="Coming soon">
+  Follow the roadmap to see where this section fits, and use the dashboard to
+  track progress.
+</Alert>

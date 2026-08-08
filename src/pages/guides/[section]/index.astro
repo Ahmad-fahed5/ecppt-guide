@@ -1,0 +1,93 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Breadcrumbs from '../../../components/ui/Breadcrumbs.astro';
+import Icon from '../../../components/ui/Icon.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import Alert from '../../../components/ui/Alert.astro';
+import { kbSections, kbSectionMap, type KbSectionSlug } from '../../../config/knowledgeBase';
+import { roadmapPhases } from '../../../config/roadmap';
+import { difficultyLabels, difficultyBadge } from '../../../config/guideMeta';
+import { getCollection } from 'astro:content';
+
+export function getStaticPaths() {
+  return kbSections.map((section) => ({ params: { section: section.slug } }));
+}
+
+const { section } = Astro.params;
+const meta = kbSectionMap[section as KbSectionSlug];
+const phase = roadmapPhases.find((p) => p.number === meta.phase);
+const guides = (await getCollection('guide'))
+  .filter((guide) => guide.data.section === section)
+  .sort((a, b) => a.data.order - b.data.order);
+---
+
+<BaseLayout title={meta.label} description={meta.description}>
+  <Breadcrumbs
+    items={[
+      { label: 'Home', href: '/' },
+      { label: 'Knowledge Base', href: '/guides' },
+      { label: meta.label },
+    ]}
+  />
+
+  <header class="page-header">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <Badge variant="cyan">Phase {meta.phase}</Badge>
+      {phase && <Badge variant="green">{phase.title}</Badge>}
+    </div>
+    <h1>{meta.label}</h1>
+    <p>{meta.description}</p>
+  </header>
+
+  {phase && (
+    <a class="related-link" href={`/roadmap#phase-${meta.phase}`} style="margin-bottom:24px;display:inline-flex;">
+      <Icon name="route" size={14} />
+      Part of the roadmap — Phase {meta.phase}
+    </a>
+  )}
+
+  {guides.length > 0 ? (
+    <div class="section-list">
+      {guides.map((guide) => (
+        <a class="card card--clickable" href={`/guides/${guide.id}`}>
+          <div class="card-body">
+            <h3 class="card-title">{guide.data.title}</h3>
+            <p class="card-text">{guide.data.description}</p>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <Badge variant={difficultyBadge(guide.data.difficulty)}>
+              {difficultyLabels[guide.data.difficulty]}
+            </Badge>
+            {guide.data.draft && <Badge variant="amber">Draft</Badge>}
+          </div>
+        </a>
+      ))}
+    </div>
+  ) : (
+    <div class="panel">
+      <p class="panel-title">
+        <Icon name="clock" size={16} />
+        Guides coming soon
+      </p>
+      <p class="panel-text">
+        The content for this section is being written and will appear here. In
+        the meantime, check the roadmap to see where this section fits in the
+        overall path.
+      </p>
+      <div style="margin-top:14px;">
+        <a class="btn btn--ghost" href={`/roadmap#phase-${meta.phase}`}>
+          View roadmap phase
+        </a>
+      </div>
+    </div>
+  )}
+
+  <div style="margin-top:28px;">
+    <Alert variant="info" title="Tip">
+      <p>
+        Add guides to your personal notes to build revision material as you
+        learn. Progress on checklists is saved locally in your browser.
+      </p>
+    </Alert>
+  </div>
+</BaseLayout>

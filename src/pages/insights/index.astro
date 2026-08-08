@@ -1,0 +1,35 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import UnderConstruction from '../../components/layout/UnderConstruction.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Alert from '../../components/ui/Alert.astro';
+import SourceTag from '../../components/ui/SourceTag.astro';
+---
+
+<BaseLayout
+  title="Practical & Candidate Insights"
+  description="Community considerations and practical guidance, clearly labeled and non-official."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Practical Insights' }]} />
+  <UnderConstruction
+    badge="Community"
+    icon="lightbulb"
+    title="Practical & Candidate Insights"
+    description="Practical considerations, common candidate concerns, and recommended approaches — never fabricated first-person experiences."
+    planned={[
+      'Practical considerations',
+      'Common candidate concerns',
+      'Recommended approaches',
+      'Exam-day logistics notes',
+    ]}
+  />
+  <Alert variant="warning" title="How we label this content">
+    <p>
+      Content in this section is
+      <SourceTag source="practical" /> or
+      <SourceTag source="community" /> only. We do not publish fabricated
+      first-person accounts. Any observation is written as a practical
+      consideration, not as a claim about a specific exam.
+    </p>
+  </Alert>
+</BaseLayout>

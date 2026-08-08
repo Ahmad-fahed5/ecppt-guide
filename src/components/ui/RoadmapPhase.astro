@@ -1,0 +1,85 @@
+---
+import type { RoadmapPhase } from '../../config/roadmap';
+import { kbSectionMap } from '../../config/knowledgeBase';
+import Checklist from './Checklist.astro';
+import Icon from './Icon.astro';
+
+interface Props {
+  phase: RoadmapPhase;
+}
+
+const { phase } = Astro.props;
+const section = phase.section ? kbSectionMap[phase.section] : undefined;
+---
+
+<article class="roadmap-phase" id={`phase-${phase.number}`}>
+  <header class="roadmap-phase-head">
+    <div class="phase-num" aria-hidden="true">{String(phase.number).padStart(2, '0')}</div>
+    <div>
+      <h2 class="phase-title">Phase {phase.number} — {phase.title}</h2>
+      {section && (
+        <a class="phase-section" href={`/guides/${section.slug}`}>
+          <Icon name={section.icon} size={13} />
+          {section.label}
+        </a>
+      )}
+    </div>
+  </header>
+
+  <p class="phase-objective">{phase.objective}</p>
+
+  <div class="phase-grid">
+    <div class="phase-col">
+      <h3>What you will learn</h3>
+      <ul class="phase-list">
+        {phase.learn.map((item) => (
+          <li>{item}</li>
+        ))}
+      </ul>
+    </div>
+    <div class="phase-col">
+      <h3>Recommended order</h3>
+      <ul class="phase-list phase-list--order">
+        {phase.order.map((item) => (
+          <li>{item}</li>
+        ))}
+      </ul>
+    </div>
+    <div class="phase-col">
+      <h3>Key tools</h3>
+      <div class="phase-tools">
+        {phase.tools.map((tool) => (
+          <span class="chip">{tool}</span>
+        ))}
+      </div>
+      <h3 style="margin-top:18px;">Practical skills</h3>
+      <ul class="phase-list">
+        {phase.skills.map((skill) => (
+          <li>{skill}</li>
+        ))}
+      </ul>
+    </div>
+  </div>
+
+  <div class="phase-completion">
+    <Checklist
+      id={`phase-${phase.number}`}
+      title="Phase completion checklist"
+      items={phase.completion}
+    />
+  </div>
+
+  {phase.related.length > 0 && (
+    <div class="phase-related">
+      <h3>Related</h3>
+      <div class="phase-related-links">
+        {phase.related.map((link) => (
+          <a class="related-link" href={link.href}>
+            {link.title}
+            <Icon name="arrow-right" size={13} />
+          </a>
+        ))}
+      </div>
+    </div>
+  )}
+</article>

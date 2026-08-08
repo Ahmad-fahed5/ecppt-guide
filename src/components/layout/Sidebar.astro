@@ -1,0 +1,34 @@
+---
+import Icon from '../ui/Icon.astro';
+import { sidebarGroups, isActive } from '../../config/navigation';
+
+const pathname = Astro.url.pathname;
+---
+
+<aside id="sidebar" class="sidebar" aria-label="Section navigation">
+  <div class="sidebar-inner">
+    {sidebarGroups.map((group) => (
+      <nav class="nav-group" aria-label={group.title}>
+        <p class="nav-group-title">{group.title}</p>
+        <ul style="list-style:none;margin:0;padding:0;">
+          {group.items.map((item) => (
+            <li>
+              <a
+                href={item.href}
+                class:list={['nav-link', { active: isActive(pathname, item.href) }]}
+              >
+                {item.icon && (
+                  <span class="nav-link-icon">
+                    <Icon name={item.icon} size={16} />
+                  </span>
+                )}
+                <span>{item.title}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    ))}
+  </div>
+</aside>
+<div id="nav-overlay" class="nav-overlay" aria-hidden="true"></div>

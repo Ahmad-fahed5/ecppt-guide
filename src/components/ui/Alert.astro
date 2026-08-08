@@ -1,0 +1,32 @@
+---
+import Icon from './Icon.astro';
+
+interface Props {
+  variant?: 'info' | 'success' | 'warning' | 'danger';
+  title?: string;
+}
+
+const { variant = 'info', title } = Astro.props;
+
+const icons = {
+  info: 'info',
+  success: 'check',
+  warning: 'alert-triangle',
+  danger: 'alert-triangle',
+} as const;
+---
+
+<div
+  class:list={['alert', `alert--${variant}`]}
+  role={variant === 'danger' ? 'alert' : 'note'}
+>
+  <span class="alert-icon" aria-hidden="true">
+    <Icon name={icons[variant]} size={18} />
+  </span>
+  <div class="alert-body">
+    {title && <p class="alert-title">{title}</p>}
+    <div class="alert-content">
+      <slot />
+    </div>
+  </div>
+</div>

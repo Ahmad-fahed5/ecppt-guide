@@ -1,0 +1,70 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/layout/PageHeader.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Icon from '../../components/ui/Icon.astro';
+import Alert from '../../components/ui/Alert.astro';
+import Checklist from '../../components/ui/Checklist.astro';
+
+const tracks = [
+  {
+    name: 'Lab 01 — Network discovery',
+    description: 'Scoping a lab network and mapping the attack surface.',
+  },
+  {
+    name: 'Lab 02 — Web exploitation',
+    description: 'Working through a vulnerable web application end to end.',
+  },
+  {
+    name: 'Lab 03 — Pivoting',
+    description: 'Tunneling through an internal network from a foothold.',
+  },
+  {
+    name: 'Lab 04 — Report writing',
+    description: 'Turning engagement notes into a professional report.',
+  },
+];
+---
+
+<BaseLayout
+  title="Practice Lab"
+  description="Hands-on exercises to reinforce what you learn."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Practice Lab' }]} />
+  <PageHeader
+    title="Practice lab"
+    description="Hands-on exercises designed to reinforce each domain. Lab content is not yet written."
+    badge="Hands-on"
+  />
+
+  <div class="grid grid--2">
+    {tracks.map((track) => (
+      <article class="card card--violet">
+        <span class="card-icon">
+          <Icon name="flask" size={22} />
+        </span>
+        <div class="card-body">
+          <h3 class="card-title">{track.name}</h3>
+          <p class="card-text">{track.description}</p>
+        </div>
+      </article>
+    ))}
+  </div>
+
+  <Alert variant="info" title="Authorized environments only">
+    Lab exercises are designed to run against intentionally vulnerable
+    environments or networks you own. Always confirm you are authorized before
+    testing any system.
+  </Alert>
+
+  <Checklist
+    id="lab-prep"
+    title="Lab preparation"
+    items={[
+      'Set up a disposable virtual machine',
+      'Snapshot your lab before each exercise',
+      'Document every command you run',
+      'Take evidence screenshots as you go',
+    ]}
+  />
+</BaseLayout>

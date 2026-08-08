@@ -1,0 +1,65 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/layout/PageHeader.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Icon from '../../components/ui/Icon.astro';
+import Alert from '../../components/ui/Alert.astro';
+
+const phases = [
+  {
+    name: '1. Reconnaissance',
+    description: 'Passive and active information gathering about the target.',
+  },
+  {
+    name: '2. Scanning & Enumeration',
+    description: 'Identifying live hosts, open ports, services, and vulnerabilities.',
+  },
+  {
+    name: '3. Exploitation',
+    description: 'Gaining access by leveraging identified weaknesses.',
+  },
+  {
+    name: '4. Post-Exploitation',
+    description: 'Privilege escalation, persistence, and evidence collection.',
+  },
+  {
+    name: '5. Pivoting & Lateral Movement',
+    description: 'Moving through networks and expanding access across hosts.',
+  },
+  {
+    name: '6. Reporting',
+    description: 'Documenting findings and providing actionable remediation.',
+  },
+];
+---
+
+<BaseLayout
+  title="Methodology"
+  description="A repeatable approach to penetration testing engagements."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Methodology' }]} />
+  <PageHeader
+    title="Testing methodology"
+    description="A repeatable approach to penetration testing engagements. Detailed write-ups for each phase are planned."
+    badge="Approach"
+  />
+
+  <div class="grid grid--sections">
+    {phases.map((phase) => (
+      <article class="card card--green">
+        <span class="card-icon">
+          <Icon name="compass" size={22} />
+        </span>
+        <div class="card-body">
+          <h3 class="card-title">{phase.name}</h3>
+          <p class="card-text">{phase.description}</p>
+        </div>
+      </article>
+    ))}
+  </div>
+
+  <Alert variant="info" title="Content pending">
+    In-depth write-ups, command walkthroughs, and decision trees will be added
+    for each phase in the content phase.
+  </Alert>
+</BaseLayout>

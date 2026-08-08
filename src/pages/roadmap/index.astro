@@ -1,0 +1,51 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/layout/PageHeader.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import RoadmapPhase from '../../components/ui/RoadmapPhase.astro';
+import Icon from '../../components/ui/Icon.astro';
+import Alert from '../../components/ui/Alert.astro';
+import { roadmapPhases } from '../../config/roadmap';
+---
+
+<BaseLayout
+  title="Roadmap"
+  description="A complete learning roadmap for eCPPTv3, from foundations to exam readiness."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Roadmap' }]} />
+  <PageHeader
+    badge="Learning path"
+    title="Learning roadmap"
+    description="Fifteen phases that take you from zero to exam-ready. Each phase has an objective, a recommended order, key tools, practical skills, a completion checklist, and links to the guides you need."
+  />
+
+  <div class="panel" style="border-style:solid;margin-bottom:8px;">
+    <p class="panel-title">
+      <Icon name="route" size={16} />
+      How to use this roadmap
+    </p>
+    <p class="panel-text">
+      Work through phases in order the first time. Every completion checklist
+      saves its state in your browser, so you can track where you left off.
+      Later, use the roadmap to target gaps and revise before the final
+      readiness phase. Guides are linked per phase — sections with no guides yet
+      are still being written.
+    </p>
+  </div>
+
+  <div class="roadmap">
+    {roadmapPhases.map((phase) => (
+      <RoadmapPhase phase={phase} />
+    ))}
+  </div>
+
+  <div style="margin-top:32px;">
+    <Alert variant="info" title="Progression tip">
+      <p>
+        If a phase takes more than a few sessions, break it into parts and
+        re-run the completion checklist after each part. The roadmap is a
+        guide, not a race — depth of understanding matters more than speed.
+      </p>
+    </Alert>
+  </div>
+</BaseLayout>

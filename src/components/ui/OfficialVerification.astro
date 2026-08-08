@@ -1,0 +1,17 @@
+---
+import Alert from './Alert.astro';
+
+interface Props {
+  what?: string;
+}
+
+const { what = 'This detail could not be verified from an authoritative source available to this project.' } = Astro.props;
+---
+
+<Alert variant="danger" title="[OFFICIAL SOURCE VERIFICATION REQUIRED]">
+  <p>{what}</p>
+  <p style="margin-top:6px;font-size:13px;">
+    We do not publish unverified official information. Verify the current details
+    against the official source before relying on them.
+  </p>
+</Alert>

@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import UnderConstruction from '../../components/layout/UnderConstruction.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+---
+
+<BaseLayout
+  title="Playbooks"
+  description="Step-by-step assessment playbooks from initial foothold to pivot."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Playbooks' }]} />
+  <UnderConstruction
+    badge="Practice"
+    icon="clipboard-check"
+    title="Playbooks"
+    description="Step-by-step assessment playbooks that take you from START through ENUMERATE, IDENTIFY, VALIDATE, EXPLOIT, ESCALATE, LATERAL MOVE, and DOCUMENT."
+    planned={[
+      'Initial foothold playbook',
+      'Linux enumeration playbook',
+      'Windows enumeration playbook',
+      'Web enumeration playbook',
+      'Linux privilege escalation playbook',
+      'Windows privilege escalation playbook',
+      'Active Directory enumeration playbook',
+      'Lateral movement playbook',
+      'Pivoting playbook',
+    ]}
+  />
+</BaseLayout>

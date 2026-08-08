@@ -1,0 +1,26 @@
+---
+import { Code } from 'astro/components';
+import type { ComponentProps } from 'astro/types';
+import CopyButton from './CopyButton.astro';
+
+type CodeLang = ComponentProps<typeof Code>['lang'];
+
+interface Props {
+  code: string;
+  lang?: CodeLang;
+  title?: string;
+}
+
+const { code, lang = 'bash', title } = Astro.props;
+const id = `code-${crypto.randomUUID()}`;
+---
+
+<div class="codeblock">
+  <div class="codeblock-head">
+    <span class="codeblock-title">{title ?? lang}</span>
+    <CopyButton target={id} />
+  </div>
+  <div id={id}>
+    <Code code={code} lang={lang} theme="github-dark-dimmed" />
+  </div>
+</div>

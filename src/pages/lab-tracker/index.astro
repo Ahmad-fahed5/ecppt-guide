@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import UnderConstruction from '../../components/layout/UnderConstruction.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+---
+
+<BaseLayout
+  title="Lab Tracker"
+  description="Record and review the labs you have completed."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Lab Tracker' }]} />
+  <UnderConstruction
+    badge="Personal"
+    icon="flask"
+    title="Lab tracker"
+    description="Record lab name, platform, topic, difficulty, status, notes, and key techniques learned. Build a revision history of every machine you have worked through."
+    planned={[
+      'Log labs with platform and difficulty',
+      'Track status and key techniques',
+      'Filter by topic and platform',
+      'Review completed labs for revision',
+    ]}
+  />
+</BaseLayout>

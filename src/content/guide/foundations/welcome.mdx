@@ -1,0 +1,64 @@
+---
+title: Welcome to the Guide
+description: Orientation for the platform — how the knowledge base is organized and how to get the most out of it.
+section: foundations
+phase: 0
+order: 1
+draft: false
+difficulty: beginner
+tags: ['orientation', 'start-here']
+---
+
+import Alert from '../../../components/ui/Alert.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import CodeBlock from '../../../components/ui/CodeBlock.astro';
+import Checklist from '../../../components/ui/Checklist.astro';
+
+## About this platform
+
+This is a hands-on, offensive-security learning platform. Content is organized
+into a **knowledge base** of study guides, grouped into sections that follow a
+recommended learning order. The [roadmap](/roadmap) shows the full path.
+
+Content here is written from a practical penetration-testing perspective. It is
+meant to be used in **authorized labs and assessments only**.
+
+<Alert variant="info" title="Scaffold note">
+  This page exists to verify that MDX content collections, Shiki highlighting,
+  and custom Astro components all render correctly together.
+</Alert>
+
+## How the knowledge base is organized
+
+Every guide belongs to a section (for example `Foundations`, `Web Security`, or
+`Active Directory`). Sections map to roadmap phases, so you can learn in order
+or jump straight to a topic.
+
+<Badge variant="green">Ready</Badge>
+<Badge variant="cyan">In progress</Badge>
+<Badge variant="amber">Draft</Badge>
+<Badge variant="rose">Blocked</Badge>
+<Badge variant="violet">Advanced</Badge>
+
+## Code examples
+
+Commands always explain what they do and what to look for in the output:
+
+<CodeBlock
+  lang="bash"
+  title="Example: viewing a listening service"
+  code={`ss -tulpn | grep LISTEN`}
+/>
+
+## Interactive checklists
+
+<Checklist
+  id="orientation"
+  title="Orientation checklist"
+  items={[
+    'Skim the dashboard to see all sections',
+    'Open a study guide from the sidebar',
+    'Bookmark the Toolbox for quick lookups',
+    'Set up your personal notes workflow',
+  ]}
+/>

@@ -1,0 +1,21 @@
+---
+type SourceType = 'official' | 'practical' | 'community';
+
+interface Props {
+  source: SourceType;
+  label?: string;
+}
+
+const { source, label } = Astro.props;
+
+const labels: Record<SourceType, string> = {
+  official: 'Official',
+  practical: 'Practical guidance',
+  community: 'Community insight',
+};
+---
+
+<span class:list={['source-tag', `source-tag--${source}`]}>
+  <span class="source-tag-dot" aria-hidden="true"></span>
+  {label ?? labels[source]}
+</span>

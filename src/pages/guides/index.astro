@@ -1,0 +1,85 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/layout/PageHeader.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Icon from '../../components/ui/Icon.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Alert from '../../components/ui/Alert.astro';
+import { kbSections } from '../../config/knowledgeBase';
+import { difficultyLabels, difficultyBadge } from '../../config/guideMeta';
+import { getCollection } from 'astro:content';
+
+const guides = await getCollection('guide');
+const guideCount = (section: string) => guides.filter((g) => g.data.section === section).length;
+const published = guides.filter((g) => !g.data.draft).sort((a, b) => a.data.order - b.data.order);
+---
+
+<BaseLayout
+  title="Knowledge Base"
+  description="Structured study guides across every core security domain."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Knowledge Base' }]} />
+  <PageHeader
+    badge="Learn"
+    title="Knowledge Base"
+    description="Structured study guides across every core domain, organized to follow the roadmap. Sections with no guides yet are being written."
+  />
+
+  <section>
+    <div class="grid grid--sections">
+      {kbSections.map((section) => {
+        const count = guideCount(section.slug);
+        return (
+          <a class="card card--clickable" href={`/guides/${section.slug}`}>
+            <span class="card-icon">
+              <Icon name={section.icon} size={22} />
+            </span>
+            <div class="card-body">
+              <h3 class="card-title">{section.label}</h3>
+              <p class="card-text">{section.description}</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              {count > 0 ? (
+                <Badge variant="green">{count} guide{count === 1 ? '' : 's'}</Badge>
+              ) : (
+                <Badge variant="amber">Coming soon</Badge>
+              )}
+              <Badge variant="cyan">Phase {section.phase}</Badge>
+            </div>
+          </a>
+        );
+      })}
+    </div>
+  </section>
+
+  {published.length > 0 && (
+    <section style="margin-top:40px;">
+      <h2 style="font-size:20px;margin-bottom:14px;">Latest guides</h2>
+      <div class="section-list">
+        {published.map((guide) => (
+          <a class="card card--clickable" href={`/guides/${guide.id}`}>
+            <div class="card-body">
+              <h3 class="card-title">{guide.data.title}</h3>
+              <p class="card-text">{guide.data.description}</p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <Badge variant="cyan">{guide.data.section}</Badge>
+              <Badge variant={difficultyBadge(guide.data.difficulty)}>
+                {difficultyLabels[guide.data.difficulty]}
+              </Badge>
+            </div>
+          </a>
+        ))}
+      </div>
+    </section>
+  )}
+
+  <div style="margin-top:32px;">
+    <Alert variant="info" title="Learn in order">
+      <p>
+        For the recommended path through these sections, follow the
+        <a href="/roadmap" style="color:var(--accent);"> roadmap </a>.
+      </p>
+    </Alert>
+  </div>
+</BaseLayout>

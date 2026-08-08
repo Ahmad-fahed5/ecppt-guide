@@ -1,0 +1,32 @@
+---
+import Icon from '../ui/Icon.astro';
+import { headerNav, isActive } from '../../config/navigation';
+
+const pathname = Astro.url.pathname;
+---
+
+<header class="site-header">
+  <a href="/" class="brand" aria-label="ECPPTv3 Guide — home">
+    <span class="brand-mark">
+      <Icon name="shield" size={20} />
+    </span>
+    <span class="brand-text">
+      <span class="brand-name">ECPPTv3 Guide</span>
+      <span class="brand-sub">Ultimate Guide</span>
+    </span>
+  </a>
+
+  <nav class="header-nav" aria-label="Primary">
+    {headerNav.map((item) => (
+      <a href={item.href} class:list={[{ active: isActive(pathname, item.href) }]}>
+        {item.title}
+      </a>
+    ))}
+  </nav>
+
+  <div class="header-actions">
+    <button id="nav-toggle" class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">
+      <Icon name="menu" size={20} />
+    </button>
+  </div>
+</header>

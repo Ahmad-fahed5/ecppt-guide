@@ -1,0 +1,24 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import UnderConstruction from '../../components/layout/UnderConstruction.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+---
+
+<BaseLayout
+  title="Progress"
+  description="Track topic, section, and overall progress across the platform."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Progress' }]} />
+  <UnderConstruction
+    badge="Personal"
+    icon="gauge"
+    title="Progress tracking"
+    description="Mark topics as completed, reviewed, needs review, or important. See overall progress, section progress, completed checklists, and revision status — stored locally in your browser."
+    planned={[
+      'Overall progress',
+      'Section progress',
+      'Completed checklists',
+      'Revision status',
+    ]}
+  />
+</BaseLayout>

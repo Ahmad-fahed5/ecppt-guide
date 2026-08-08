@@ -1,0 +1,95 @@
+
+> ecppt-guide@0.1.0 dev
+> astro dev --host 127.0.0.1
+
+[2m16:03:43[22m [34m[vite][39m connected.
+[2m16:03:44[22m [34m[types][39m Generated [2m1ms[22m
+[2m16:03:44[22m [34m[vite][39m connected.
+[2m16:03:45[22m [34m[content][39m Syncing content
+[2m16:03:45[22m [34m[content][39m Synced content
+[42m[1m astro [22m[49m [32mv7.2.0[39m [2mready in[22m 3159 [2mms[22m
+[2m┃[22m Local    [36mhttp://127.0.0.1:4321/[39m
+[2m16:03:45[22m [32mwatching for file changes...[39m
+[2m16:03:52[22m [34m[200][39m / [2m120ms[22m
+[2m16:04:03[22m [34m[200][39m / [2m25ms[22m
+[2m16:04:15[22m [34m[200][39m /toolbox [2m40ms[22m
+[2m16:04:17[22m [34m[200][39m /labs [2m33ms[22m
+[2m16:04:18[22m [34m[200][39m /reporting [2m34ms[22m
+[2m16:04:19[22m [34m[200][39m /guides [2m40ms[22m
+[2m16:04:20[22m [34m[200][39m /methodology [2m36ms[22m
+[2m16:04:21[22m [34m[200][39m /labs [2m8ms[22m
+[2m16:04:22[22m [34m[200][39m /toolbox [2m9ms[22m
+[2m16:04:22[22m [34m[200][39m /reporting [2m7ms[22m
+[2m16:04:23[22m [34m[200][39m / [2m8ms[22m
+[2m16:04:24[22m [34m[200][39m /guides [2m8ms[22m
+[2m16:04:24[22m [34m[200][39m /methodology [2m6ms[22m
+[2m16:04:25[22m [34m[200][39m /toolbox [2m7ms[22m
+[2m16:04:26[22m [34m[200][39m /labs [2m8ms[22m
+[2m16:04:27[22m [34m[200][39m /reporting [2m7ms[22m
+[2m16:04:30[22m [34m[200][39m /methodology [2m6ms[22m
+[2m16:04:32[22m [34m[200][39m /toolbox [2m7ms[22m
+[2m16:04:32[22m [34m[200][39m /labs [2m7ms[22m
+[2m16:04:33[22m [34m[200][39m /reporting [2m6ms[22m
+[2m16:04:44[22m [34m[200][39m /labs [2m9ms[22m
+[2m16:04:46[22m [34m[200][39m / [2m9ms[22m
+[2m16:04:47[22m [34m[200][39m /guides [2m7ms[22m
+[2m16:04:47[22m [34m[200][39m /methodology [2m6ms[22m
+[2m16:19:07[22m [34m[200][39m /methodology [2m6ms[22m
+[2m16:19:10[22m [34m[200][39m /methodology [2m50ms[22m
+[2m16:19:19[22m [34m[200][39m /guides [2m35ms[22m
+[2m16:20:59[22m [34m[200][39m /guides [2m26ms[22m
+[2m16:21:12[22m [34m[200][39m /guides [2m62ms[22m
+[2m16:21:12[22m [34m[content][39m Syncing content
+[2m16:21:12[22m [34m[content][39m Content config changed
+[2m16:21:12[22m [34m[content][39m Clearing content store
+[2m16:21:12[22m [34m[200][39m /guides [2m47ms[22m
+[2m16:21:12[22m [34m[200][39m /guides [2m35ms[22m
+[2m16:21:12[22m [34m[content][39m Synced content
+[2m16:21:12[22m [34m[200][39m /guides [2m28ms[22m
+[2m16:21:28[22m [34m[glob-loader][39m Reloaded data from [32mfoundations/welcome.mdx[39m
+[2m16:25:01[22m [34m[watch][39m /src/styles/global.css
+[2m16:28:58[22m [34m[glob-loader][39m Reloaded data from [32mfoundations/welcome.mdx[39m
+[2m16:30:35[22m [34m[200][39m / [2m65ms[22m
+[2m16:30:35[22m [34m[200][39m /roadmap/ [2m19ms[22m
+[2m16:30:36[22m [34m[200][39m /guides/ [2m20ms[22m
+[2m16:30:36[22m [34m[200][39m /guides/foundations/ [2m14ms[22m
+[2m16:30:36[22m [34m[200][39m /guides/foundations/welcome/ [2m171ms[22m
+[2m16:30:36[22m [34m[200][39m /guides/info-gathering/ [2m5ms[22m
+[2m16:30:36[22m [34m[200][39m /guides/web/ [2m5ms[22m
+[2m16:30:36[22m [34m[200][39m /guides/active-directory/ [2m7ms[22m
+[2m16:30:36[22m [34m[200][39m /playbooks/ [2m14ms[22m
+[2m16:30:36[22m [34m[200][39m /cheat-sheets/ [2m14ms[22m
+[2m16:30:36[22m [34m[200][39m /exam-prep/ [2m11ms[22m
+[2m16:30:36[22m [34m[200][39m /insights/ [2m16ms[22m
+[2m16:30:37[22m [34m[200][39m /my-notes/ [2m14ms[22m
+[2m16:30:37[22m [34m[200][39m /progress/ [2m13ms[22m
+[2m16:30:37[22m [34m[200][39m /lab-tracker/ [2m16ms[22m
+[2m16:30:37[22m [34m[200][39m /methodology/ [2m12ms[22m
+[2m16:30:37[22m [34m[200][39m /toolbox/ [2m13ms[22m
+[2m16:30:37[22m [34m[200][39m /reporting/ [2m12ms[22m
+[2m16:30:37[22m [34m[200][39m /labs/ [2m11ms[22m
+[2m16:30:37[22m [33m[404][39m /nope/ [2m16ms[22m
+[2m16:30:57[22m [34m[200][39m / [2m12ms[22m
+[2m16:30:57[22m [34m[200][39m /roadmap/ [2m18ms[22m
+[2m16:30:58[22m [34m[200][39m /guides/foundations/ [2m8ms[22m
+[2m16:30:58[22m [34m[200][39m /guides/foundations/welcome/ [2m13ms[22m
+[2m16:31:20[22m [34m[200][39m / [2m5ms[22m
+[2m16:32:17[22m [34m[200][39m /guides [2m13ms[22m
+[2m16:32:18[22m [34m[200][39m /guides [2m11ms[22m
+[2m16:32:20[22m [34m[200][39m /guides/web [2m8ms[22m
+[2m16:32:22[22m [34m[200][39m /guides/info-gathering [2m17ms[22m
+[2m16:32:26[22m [34m[200][39m /guides/foundations [2m12ms[22m
+[2m16:32:27[22m [34m[200][39m /guides/linux-privesc [2m13ms[22m
+[2m16:32:28[22m [34m[200][39m /guides/active-directory [2m11ms[22m
+[2m16:32:32[22m [34m[200][39m /guides/powershell [2m8ms[22m
+[2m16:32:36[22m [34m[200][39m /cheat-sheets [2m8ms[22m
+[2m16:32:43[22m [34m[200][39m / [2m11ms[22m
+[2m16:32:45[22m [34m[200][39m /roadmap [2m18ms[22m
+[2m16:32:46[22m [34m[200][39m /guides [2m12ms[22m
+[2m16:32:47[22m [34m[200][39m /methodology [2m6ms[22m
+[2m16:32:48[22m [34m[200][39m /toolbox [2m10ms[22m
+[2m16:32:49[22m [34m[200][39m /exam-prep [2m6ms[22m
+[2m16:32:50[22m [34m[200][39m /roadmap [2m16ms[22m
+[2m16:32:51[22m [34m[200][39m / [2m13ms[22m
+[2m16:32:53[22m [34m[200][39m /guides/methodology [2m13ms[22m
+[2m16:33:03[22m [34m[200][39m /progress [2m7ms[22m

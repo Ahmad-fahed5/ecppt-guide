@@ -1,0 +1,33 @@
+---
+interface Props {
+  value: number;
+  max?: number;
+  label?: string;
+  tone?: 'green' | 'cyan' | 'violet' | 'amber' | 'rose';
+}
+
+const { value, max = 100, label, tone = 'green' } = Astro.props;
+const clamped = Math.max(0, Math.min(max, value));
+const pct = max > 0 ? Math.round((clamped / max) * 100) : 0;
+---
+
+<div
+  class="progress"
+  role="progressbar"
+  aria-valuenow={clamped}
+  aria-valuemin={0}
+  aria-valuemax={max}
+  aria-label={label}
+>
+  {label && (
+    <div class="progress-meta">
+      <span class="progress-label">{label}</span>
+      <span>
+        {clamped}/{max}
+      </span>
+    </div>
+  )}
+  <div class="progress-track">
+    <div class:list={['progress-bar', `progress-bar--${tone}`]} style={`width:${pct}%`}></div>
+  </div>
+</div>

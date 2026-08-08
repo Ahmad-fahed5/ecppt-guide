@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import UnderConstruction from '../../components/layout/UnderConstruction.astro';
+import Breadcrumbs from '../../components/ui/Breadcrumbs.astro';
+import Alert from '../../components/ui/Alert.astro';
+---
+
+<BaseLayout
+  title="Exam Preparation"
+  description="Revision plans, exam-day strategy, and readiness for eCPPTv3."
+>
+  <Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Exam Preparation' }]} />
+  <UnderConstruction
+    badge="Prepare"
+    icon="graduation-cap"
+    title="Exam Preparation"
+    description="Revision plans, exam-day strategy, time management, and troubleshooting — built from practical guidance and clearly labeled official information where it can be verified."
+    planned={[
+      'Revision plan',
+      'Final revision sheet',
+      'Final cheat sheet',
+      'Exam-day strategy',
+      'Time management',
+      'Troubleshooting strategy',
+      'Final readiness checklist',
+    ]}
+  />
+  <Alert variant="danger" title="[OFFICIAL SOURCE VERIFICATION REQUIRED]">
+    <p>
+      Official exam details — format, duration, weights, and changes between
+      versions — are published by INE. They will only appear here once verified
+      from an authoritative source. Nothing in this section is assumed or
+      fabricated.
+    </p>
+  </Alert>
+</BaseLayout>
