@@ -6,7 +6,7 @@ phase: 1
 order: 3
 difficulty: beginner
 draft: false
-tags: ['nmap', 'port-scanning', 'tcp', 'udp']
+tags: ['nmap', 'port-scanning', 'tcp', 'udp', 'masscan', 'firewall', 'ack-scan']
 updated: 2026-08-08
 ---
 
@@ -54,7 +54,7 @@ This is the default when you do not have root privileges, and it uses the operat
 
 ### Other scan types (brief)
 
-Nmap supports more (FIN, NULL, Xmas, ACK, window) that exploit subtle TCP behaviours to bypass simple filters. They are rarely needed in lab environments, and their results can be misleading, so treat them as advanced topics and stick to SYN/connect for most work.
+Nmap supports more (FIN, NULL, Xmas, ACK, window) that exploit subtle TCP behaviours to bypass simple filters. They are rarely needed in lab environments, and their results can be misleading, so treat them as advanced topics and stick to SYN/connect for most work. The **ACK scan (`-sA`)** is the one worth learning — it is a firewall probe rather than a port finder, covered in [Firewall and filtering analysis](#firewall-and-filtering-analysis).
 
 ## UDP scanning (`-sU`)
 
@@ -82,6 +82,40 @@ Every port ends up in one of these states:
 | `closed\|filtered` | Nmap cannot distinguish closed from filtered (rare). |
 
 The most important habit: **an `open|filtered` port is a lead, not a dead end.** Especially with UDP, a port that looks `open|filtered` may be an open service that quietly drops malformed probes.
+
+## Firewall and filtering analysis
+
+### ACK scan (`-sA`)
+
+The ACK scan is not a port scanner in the usual sense — it is a **firewall probe**. `-sA` sends TCP packets with only the ACK flag set:
+
+<CodeBlock
+  lang="bash"
+  title="ACK scan"
+  code={`nmap -sA 192.168.1.5`}
+/>
+
+An ACK packet belongs to no real connection, so a host that receives one replies with `RST` — but whether that `RST` reaches you depends on the firewall in between. The scan reads that response pattern:
+
+- **`unfiltered`** — the `RST` came back, so the port is reachable and no stateful firewall is blocking this path.
+- **`filtered`** — no response (or an ICMP unreachable), so something between you and the host is dropping or rejecting the packets.
+
+### Filtered vs unfiltered
+
+Two traps to avoid:
+
+- **`unfiltered` does NOT mean the port is open.** It only means the packet reached the host and the host answered. The port could just as easily be closed — an unfiltered closed port also replies with `RST`.
+- **`filtered` does NOT mean the port is closed.** It means Nmap could not get an answer through whatever sits between you and the host.
+
+Because an ACK packet is not part of a handshake, **ACK scanning cannot normally determine whether a port is open** — it can only tell you whether the path to the port is filtered. Determining open ports is the job of the SYN and connect scans (`-sS` / `-sT`).
+
+### Interpreting firewall behavior
+
+Treat `-sA` as a diagnostic, not a shortcut:
+
+- **Cross-check with `-sS`:** if `-sS` reports `filtered` but `-sA` reports `unfiltered`, the port is likely reachable and a stateful firewall is dropping the SYN — the service may be open but hidden. Worth a direct connect test.
+- **Both scans filtered:** the port is genuinely blocked at the network, or the host sits behind a strict firewall.
+- **Context matters:** interpret ACK results together with other scans, the services you expect, and observed network behavior. A single `-sA` pass is one data point, not a verdict.
 
 ## Service and version detection (`-sV`)
 
@@ -169,6 +203,48 @@ Always save your scan results. You will need them for notes, reporting, and re-c
   code={`nmap -sV -oA target 10.10.10.42`}
 />
 
+## Advanced scanning
+
+### Masscan
+
+`masscan` is a high-speed port scanner built for raw throughput. It can send packets at rates Nmap only approaches, sweeping a large range in minutes — where Nmap is a fine-grained tool, masscan is a firehose. It is the right choice when you need to cover a big range quickly and care mainly about *which* IPs and ports respond, not deep service detail.
+
+**Host discovery vs port scanning:** like Nmap, masscan does both. It can probe for live hosts (ICMP or ARP) and it can scan ports, often in the same command. The trade-off is depth for speed: masscan reports which hosts and ports respond, but it does not identify service versions or run scripts.
+
+<CodeBlock
+  lang="bash"
+  title="Masscan full-port scan with host discovery"
+  code={`masscan 192.168.1.0/24 -p0-65535 --rate 1000 --ping`}
+/>
+
+Option by option:
+
+- `192.168.1.0/24` — the target range.
+- `-p0-65535` — the full TCP port space (1-65535; port 0 is a reserved starting bound that masscan includes when written this way).
+- `--rate 1000` — send up to 1000 packets per second. Lower it on fragile or monitored links; raise it when raw speed matters more than politeness.
+- `--ping` — do ICMP-based host discovery in the same pass, so only live hosts are reported alongside their open ports.
+
+**Masscan vs Nmap:**
+
+| Concern | Nmap | Masscan |
+|---|---|---|
+| Speed | Measured and adaptive (`-T0`–`-T5`, `--min-rate`) | Extreme; designed to saturate links |
+| Depth | Versions, scripts, OS detection | Open ports and little else |
+| Best for | Detailed, phased enumeration of a few targets | Quick coverage of huge ranges |
+| Privilege | `-sS` needs root | Needs root to send raw packets |
+| Typical use | The methodology in [Nmap Scanning Methodology](/guides/info-gathering/nmap-scanning-methodology) | Sweeping `/16`s and larger before Nmap takes over |
+
+The two tools are complementary: masscan covers the range fast and cheaply, then Nmap follows up on the survivors with version and script scans.
+
+### High-speed scanning considerations
+
+Raw speed has real costs:
+
+- **Traffic and noise.** `--rate 1000` (let alone `--rate 10000`) generates far more packets than a default Nmap run. On shared or monitored networks this is more detectable and more likely to trip rate limits or IDS alerts.
+- **Packet loss.** Above a link's capacity, responses — and even your own probes — get dropped, and results become incomplete. If a fast scan looks suspiciously thin, re-run slower, with `--rate` lowered or Nmap's `-T3`/`-T4` timing.
+- **Missing detail.** A masscan hit tells you a port is open, not what runs there. Always follow up with Nmap `-sV`/`-sC` on the found ports.
+- **No stealth.** There is no quiet mode at millions of packets per second. If avoiding attention matters, slow down — or stick to Nmap's timing templates.
+
 ## The essential commands, explained
 
 Every command below is a tool for a specific job — pick the one that matches the question you are answering.
@@ -187,19 +263,21 @@ Every command below is a tool for a specific job — pick the one that matches t
 - **What to look for:** The `PORT STATE SERVICE` table.
 - **Limitations:** Only scans the **top 1000 TCP ports**. Services on higher ports will be completely invisible.
 
-### `nmap -p- TARGET`
+### `sudo nmap -sS -p- TARGET`
 
 <CodeBlock
   lang="bash"
-  title="Full TCP port range"
-  code={`nmap -p- -T4 10.10.10.42`}
+  title="Full TCP port scan"
+  code={`sudo nmap -sS -p- 192.168.1.5`}
 />
 
-- **Purpose:** Scan all 65535 TCP ports.
+- **Purpose:** Scan all 65535 TCP ports — the complete port map of a host. `-sS` performs the half-open SYN scan and `-p-` covers every TCP port.
 - **When to use:** Always, once you know the host is worth your time. The top-1000 scan is for triage; `-p-` is for completeness.
-- **Important options:** `-T4` or `--min-rate` to keep it fast; `-oA fullscan` to save.
+- **Important options:** `sudo` is required because `-sS` needs raw-packet privileges; add `-T4` or `--min-rate` to keep it fast, and `-oA fullscan` to save the results.
 - **What to look for:** Open ports that the default scan missed (high ports, custom services).
 - **Limitations:** Slower than the default scan; noisy on busy networks.
+
+Without root privileges the same full range falls back to a connect scan: `nmap -sT -p- 192.168.1.5`.
 
 ### `nmap -sS TARGET`
 
@@ -290,13 +368,15 @@ Every command below is a tool for a specific job — pick the one that matches t
 | Command | Purpose | Expected result | Investigate next |
 |---|---|---|---|
 | `nmap TARGET` | Triage scan of top 1000 TCP ports | Initial port list | Full scan of anything interesting |
-| `nmap -p- -T4 TARGET` | All 65535 TCP ports | Complete port list | Version detection on open ports |
+| `sudo nmap -sS -p- TARGET` | All 65535 TCP ports | Complete port list | Version detection on open ports |
 | `nmap -sS TARGET` | Half-open SYN scan | Open/closed/filtered states | Confirm with `-sT` if odd |
 | `nmap -sT TARGET` | Full connect scan | Open ports (no root needed) | Enumerate services |
 | `nmap -sU --top-ports 100 TARGET` | UDP scan of common ports | Open / open\|filtered UDP | Targeted UDP probes |
+| `nmap -sA TARGET` | ACK scan (firewall probe) | Filtered vs unfiltered | Cross-check with `-sS` |
 | `nmap -sC -sV TARGET` | Scripts + versions | Service + version details | [Service enumeration](/guides/info-gathering/service-version-enumeration) |
 | `nmap -O TARGET` | OS fingerprint | OS hypothesis | Confirm via services |
 | `nmap -A TARGET` | Everything at once | Full picture | Review results critically |
+| `masscan RANGE -p0-65535 --rate 1000 --ping` | High-speed sweep | Fast open-port list over big ranges | Nmap `-sV` on survivors |
 
 ## Common mistakes
 
@@ -306,6 +386,7 @@ Every command below is a tool for a specific job — pick the one that matches t
 - **Not saving output with `-oA`** and losing the evidence you needed for reporting.
 - **Trusting `-O` as fact** instead of confirming with services.
 - **Forgetting `-Pn` when a host ignores host-discovery probes.**
+- **Reading an `unfiltered` ACK result as "open".** `-sA` tests the path, not the port — use `-sS`/`-sT` to determine open ports.
 
 ## Related guides
 
